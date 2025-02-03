@@ -3,8 +3,9 @@ from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterRasterLayer
                        QgsWkbTypes, QgsField, QgsProcessingUtils, QgsFields, 
                        QgsVectorLayer, QgsProject, QgsFeatureSink, QgsProcessing, QgsFeature,
                        QgsProcessingParameterVectorLayer, QgsProcessingException,
-                       QgsProcessingParameterNumber, QgsRasterLayer)
+                       QgsProcessingParameterNumber, QgsRasterLayer, QgsSnappingConfig)
 from qgis.PyQt.QtCore import QVariant, QCoreApplication
+from qgis.utils import iface
 import processing
 
 class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
@@ -17,9 +18,36 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
     SMOOTH_OFFSET = 'SMOOTH_OFFSET'
     MAX_RASTER_SIZE = 100000000  # 100 million cells, adjust as needed
 
+    def __init__(self):
+        super().__init__()
+        self.activate_snapping()
+
+    def activate_snapping(self):
+        """Enable snapping to vertices and segments"""
+        snapping_config = iface.mapCanvas().snappingUtils().config()
+        snapping_config.setEnabled(True)
+        snapping_config.setTypeFlag(QgsSnappingConfig.VertexFlag | QgsSnappingConfig.SegmentFlag)
+        iface.mapCanvas().snappingUtils().setConfig(snapping_config)
+
+    def deactivate_snapping(self):
+        """Disable snapping when tool window closes"""
+        snapping_config = iface.mapCanvas().snappingUtils().config()
+        snapping_config.setEnabled(False)
+        snapping_config.setTypeFlag(QgsSnappingConfig.VertexFlag | QgsSnappingConfig.SegmentFlag)
+        iface.mapCanvas().snappingUtils().setConfig(snapping_config)
+
+    def canCancel(self):
+        """Should be set to True for algorithms that can be cancelled"""
+        return True
+        
+    def onClose(self):
+        """Handles cleanup when algorithm window is closed"""
+        self.deactivate_snapping()
+        super().onClose()
+
     def initAlgorithm(self, config=None):
         self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_DEM, 'Input DEM'))
-        self.addParameter(QgsProcessingParameterPoint(self.POUR_POINT, 'Pour Point'))
+        self.addParameter(QgsProcessingParameterPoint(self.POUR_POINT, 'Pour Point (click on the river)'))
         self.addParameter(QgsProcessingParameterVectorLayer(self.INPUT_STREAM, 'Input Stream Network', 
                                                             types=[QgsProcessing.TypeVectorLine], optional=True))
         self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_ITERATIONS, 'Smoothing Iterations', 
@@ -95,18 +123,53 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         }, context=context, feedback=feedback)['output']
 
         # Step 4: Convert raster basin to vector
-        basin_vector = processing.run('grass7:r.to.vect', {
+        basin_vector_result = processing.run('grass7:r.to.vect', {
             'input': basin_raster,
             'type': 2,  # area
             'column': 'value',
             '-s': True,
             'output': 'TEMPORARY_OUTPUT',
             'GRASS_OUTPUT_TYPE_PARAMETER': 3  # auto
-        }, context=context, feedback=feedback)['output']
+        }, context=context, feedback=feedback)
+        
+        basin_vector = basin_vector_result['output']  # GRASS uses 'output' instead of 'OUTPUT'
+        feedback.pushInfo('Converting raster basin to vector completed')
+
+        # Step 4.1: Keep only the largest polygon if there are multiple polygons
+        basin_layer = QgsVectorLayer(basin_vector, 'basin', 'ogr')
+
+        if basin_layer.featureCount() > 1:
+            feedback.pushInfo(f'Found {basin_layer.featureCount()} polygons. Keeping only the largest one.')
+    
+            # Calculate the area for each polygon and find the largest
+            max_area = 0
+            largest_feature = None
+    
+            for feature in basin_layer.getFeatures():
+                area = feature.geometry().area()
+                if area > max_area:
+                    max_area = area
+                    largest_feature = feature
+    
+            if largest_feature:
+                # Create a new layer with only the largest feature
+                largest_polygon = QgsVectorLayer("Polygon?crs=" + basin_layer.crs().authid(), "largest_polygon", "memory")
+                provider = largest_polygon.dataProvider()
+                provider.addFeatures([largest_feature])
+                largest_polygon.updateExtents()
+        
+                feedback.pushInfo(f'Selected largest polygon with area: {max_area:.2f} square units')
+            else:
+                feedback.pushWarning('No valid features found - using original basin')
+                largest_polygon = basin_vector
+        else:
+            largest_polygon = basin_vector
+            feedback.pushInfo('Single polygon found - no need to filter')
+
 
         # Step 5: Apply smoothing to the basin
         smoothed_basin = processing.run('native:smoothgeometry', {
-            'INPUT': basin_vector,
+            'INPUT': largest_polygon,
             'ITERATIONS': smooth_iterations,
             'OFFSET': smooth_offset,
             'MAX_ANGLE': 180,
@@ -192,7 +255,7 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         
         Parameters:
             Input DEM: A raster layer representing the terrain elevation
-            Pour Point: The outlet point of the watershed
+            Pour Point: The outlet point of the watershed. The tool automatically enables snapping to streams
             Input Stream Network: Optional. A line vector layer representing the stream network
             Smoothing Iterations: Number of iterations for smoothing the basin boundary (0-10)
             Smoothing Offset: Offset value for smoothing (0.0-0.5)
@@ -207,8 +270,9 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         3. Calculates flow direction and accumulation
         4. Delineates the watershed based on the pour point
         5. Converts the raster watershed to a vector polygon
-        6. Applies smoothing to the basin boundary
-        7. Clips the input stream network to the basin boundary (if provided)
+        6. Keeps only the largest polygon (main watershed)
+        7. Applies smoothing to the basin boundary
+        8. Clips the input stream network to the basin boundary (if provided)
         
         Note: The accuracy of the watershed delineation depends on the resolution and quality of the input DEM.
         """)

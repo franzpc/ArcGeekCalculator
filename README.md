@@ -1,5 +1,5 @@
 # ArcGeek Calculator Plugin
-Version 2.6beta
+Version 2.7beta
 
 ArcGeek Calculator is a comprehensive QGIS plugin that provides various hydrological, geomorphological, and spatial analysis tools. This version introduces new tools for Global Curve Number calculation, 3D CAD exports, along with existing tools for kriging analysis, satellite index calculation, basemap management, and more.
 
@@ -47,7 +47,7 @@ Some tools in this plugin require external libraries:
 - Hypsometric Curve (part of Watershed Morphometric Analysis): Interactive version requires plotly and numpy
 
 ## Support
-If you encounter any issues or have any suggestions, please open an issue on our [issue tracker](https://github.com/franzpc/qgis/issues).
+If you encounter any issues or have any suggestions, please open an issue on our [issue tracker](https://github.com/franzpc/ArcGeekCalculator/issues).
 
 ## Support the Project
 If you find ArcGeek Calculator useful, please consider supporting its development. Your contributions help maintain and improve the plugin.
@@ -64,6 +64,8 @@ ArcGeek
 
 ## Version History
 
+2.7beta: Added snapping and bug fixes for watershed delimitation.
+
 2.6beta: Added Global Curve Number calculation and Export Contours to 3D CAD tools.
 
 2.5beta: Fixed the bug that did not calculate the coordinates for the last row (Thanks to @russ-go), compensated slope suggested by Fernando Oñate.
@@ -76,23 +78,23 @@ ArcGeek
 
 2.0beta: Added Dam Flood Simulation tool, correction of general errors.
 
-1.9beta: Improved Optimized Parcel Division tool with two-pass small polygon merging.
+1.9beta: Improved Optimized Parcel Division tool with two-pass small polygon merging
 
-1.8beta: Added Land Use Change Detection, Weighted Sum Analysis, and Optimized Parcel Division tools.
+1.8beta: Added Land Use Change Detection, Weighted Sum Analysis, and Optimized Parcel Division tools
 
-1.7beta: Added new tools for watershed analysis and geometric calculations.
+1.7beta: Added new tools for watershed analysis and geometric calculations
 
-1.6beta: Enhanced "Extract Ordered Points from Polygons" with bi-directional numbering.
+1.6beta: Enhanced "Extract Ordered Points from Polygons" with bi-directional numbering
 
-1.5beta: Added "Watershed Morphometric Analysis" tool.
+1.5beta: Added "Watershed Morphometric Analysis" tool
 
-1.4beta: Added "Extract Ordered Points from Polygons" functionalities.
+1.4beta: Added "Extract Ordered Points from Polygons" functionalities
 
-1.3beta: Added "Calculate Line from Coordinates and Table", and "Go to XY" functionalities.
+1.3beta: Added "Calculate Line from Coordinates and Table", and "Go to XY" functionalities
 
-1.2beta: Added "Lines to Ordered Points" functionality.
+1.2beta: Added "Lines to Ordered Points" functionality
 
-1.1beta: Enhanced functionality and bug fixes.
+1.1beta: Enhanced functionality and bug fixes
 
 1.0: Initial release with "Calculate Coordinates"
 
@@ -100,8 +102,6 @@ ArcGeek
 
 If you use ArcGeek Calculator in your research or projects, please cite it as follows:
 
-Pucha-Cofrep, Franz. (2024). ArcGeek Calculator (Version 2.6beta) [QGIS Plugin]. GitHub. https://github.com/franzpc/qgis/tree/main/ArcGeekCalculator
+Pucha-Cofrep, Franz. (2024). ArcGeek Calculator (Version 2.x) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
 
 For in-text citations, you can use: (Pucha-Cofrep, 2024) for parenthetical citations or Pucha-Cofrep (2024) for narrative citations. The citation format follows the American Psychological Association Style 7th Edition (APA 7).
-
-## El blog de franz
