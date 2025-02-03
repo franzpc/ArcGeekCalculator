@@ -1,11 +1,11 @@
 [general]
 name=ArcGeek Calculator
 qgisMinimumVersion=3.34
-description=A comprehensive toolset for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, and more in QGIS. Includes tools for geometry calculations (area, perimeter, length), basemaps from Google Maps, Esri, Bing, and others.
+description=ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, and 3D CAD integration in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, and anyone working with spatial data.
 version=2.7beta
 author=ArcGeek
 email=soporte@arcgeek.com
-about=This plugin provides a suite of tools for GIS analysts, cartographers, surveyors, hydrologists, urban planners, and anyone working with spatial data:
+about=Developed by Franz Pucha-Cofrep, 2024. This plugin provides a suite of tools for GIS analysts, cartographers, surveyors, hydrologists, urban planners, and anyone working with spatial data:
 # Key Features
 
     1. Calculate Coordinates: Add XY coordinates to point layers, convert to Decimal Degrees, and provide two formats of Degrees Minutes Seconds.
@@ -29,6 +29,13 @@ about=This plugin provides a suite of tools for GIS analysts, cartographers, sur
     19. Export to CSV: Export vector layer attributes to CSV format compatible with Excel.
     20. Calculate Global Curve Number: Calculate CN values using global datasets for hydrological analysis.
     21. Export c to 3D CAD: Export contour lines to DXF format preserving elevation values, making them compatible with AutoCAD, Civil 3D, BricsCAD, and other CAD software.
+
+## How to cite?
+
+If you use ArcGeek Calculator in your research or projects, please cite it as follows:
+
+Pucha-Cofrep, Franz. (2024). ArcGeek Calculator (Version 2.x) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
+
 
 tracker=https://github.com/franzpc/ArcGeekCalculator/issues
 repository=https://github.com/franzpc/ArcGeekCalculator
