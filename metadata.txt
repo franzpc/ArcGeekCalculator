@@ -1,0 +1,42 @@
+[general]
+name=ArcGeek Calculator
+qgisMinimumVersion=3.34
+description=A comprehensive toolset for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, and more in QGIS. Includes tools for geometry calculations (area, perimeter, length), basemaps from Google Maps, Esri, Bing, and others.
+version=2.6beta
+author=ArcGeek
+email=soporte@arcgeek.com
+about=This plugin provides a suite of tools for GIS analysts, cartographers, surveyors, hydrologists, urban planners, and anyone working with spatial data:
+# Key Features
+
+    1. Calculate Coordinates: Add XY coordinates to point layers, convert to Decimal Degrees, and provide two formats of Degrees Minutes Seconds.
+    2. Calculate Line Geometry: Calculate length and azimuth for line features.
+    3. Calculate Polygon Geometry: Calculate area and perimeter for polygon features.
+    4. Go to XY: Quickly navigate to specific coordinates on the map and optionally create point markers.
+    5. Extract Ordered Points from Polygons: Extract and order points from the vertices of input polygons with bi-directional numbering.
+    6. Lines to Ordered Points: Convert line features to ordered point features.
+    7. Calculate Line from Coordinates and Table: Generate a line and points from starting coordinates and a table of distances and angles.
+    8. Stream Network with Order: Generate a stream network with Strahler order.
+    9. Watershed Basin Delineation: Delineate watershed basins from a DEM and pour points.
+    10. Watershed Morphometric Analysis: Perform a comprehensive morphometric analysis of a watershed, calculating various parameters and providing their interpretations.
+    11. Land Use Change Detection: Analyze changes in land use between two time periods.
+    12. Weighted Sum Analysis: Perform weighted sum analysis on multiple raster layers.
+    13. Optimized Parcel Division: Divide rectangular parcels into lots of specified width.
+    14. Dam Flood Simulation: Simulate flooding based on a DEM and specified water level.
+    15. Kriging Analysis: Perform spatial interpolation using Kriging (requires external libraries).
+    16. Satellite Index Calculator: Calculate various satellite indices (NDVI, NDWI, etc.) for different satellites.
+    17. Basemap Manager: Add and manage basemaps from Google Maps, Esri, Bing, and others.
+    18. Screen Capture: Capture and georeference the current map view.
+    19. Export to CSV: Export vector layer attributes to CSV format compatible with Excel.
+    20. Calculate Global Curve Number: Calculate CN values using global datasets for hydrological analysis.
+    21. Export c to 3D CAD: Export contour lines to DXF format preserving elevation values, making them compatible with AutoCAD, Civil 3D, BricsCAD, and other CAD software.
+
+tracker=https://github.com/franzpc/qgis/issues
+repository=https://github.com/franzpc/qgis/tree/main/ArcGeekCalculator
+homepage=https://arcgeek.com/
+donation=https://paypal.me/ArcGeek
+license=GPL-2.0-or-later
+tags=coordinates, calculator, cn, cad, contour lines, elevation,  curve number, analysis, conversion, dms, decimal degrees, line generation, xy navigation, watershed analysis, stream order, basin delineation, area calculation, perimeter calculation, xy coordinates, land use change, weighted sum, parcel division, line from coordinates, flood simulation, dam, kriging, satellite index, basemap, google maps, esri, bing, screen capture, csv export, hidrology
+category=Analysis
+icon=icon.png
+experimental=False
+deprecated=False
