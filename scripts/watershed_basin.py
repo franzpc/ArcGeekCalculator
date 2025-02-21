@@ -26,14 +26,30 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         """Enable snapping to vertices and segments"""
         snapping_config = iface.mapCanvas().snappingUtils().config()
         snapping_config.setEnabled(True)
-        snapping_config.setTypeFlag(QgsSnappingConfig.VertexFlag | QgsSnappingConfig.SegmentFlag)
+        
+        # Handle different QGIS versions
+        try:
+            # For QGIS 3.38 and above
+            snapping_config.setTypeFlag(QgsSnappingConfig.VertexFlag | QgsSnappingConfig.SegmentFlag)
+        except TypeError:
+            # For QGIS 3.34 and below
+            snapping_config.setType(QgsSnappingConfig.Vertex | QgsSnappingConfig.Segment)
+        
         iface.mapCanvas().snappingUtils().setConfig(snapping_config)
 
     def deactivate_snapping(self):
         """Disable snapping when tool window closes"""
         snapping_config = iface.mapCanvas().snappingUtils().config()
         snapping_config.setEnabled(False)
-        snapping_config.setTypeFlag(QgsSnappingConfig.VertexFlag | QgsSnappingConfig.SegmentFlag)
+        
+        # Handle different QGIS versions
+        try:
+            # For QGIS 3.38 and above
+            snapping_config.setTypeFlag(QgsSnappingConfig.VertexFlag | QgsSnappingConfig.SegmentFlag)
+        except TypeError:
+            # For QGIS 3.34 and below
+            snapping_config.setType(QgsSnappingConfig.Vertex | QgsSnappingConfig.Segment)
+        
         iface.mapCanvas().snappingUtils().setConfig(snapping_config)
 
     def canCancel(self):
@@ -166,7 +182,6 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             largest_polygon = basin_vector
             feedback.pushInfo('Single polygon found - no need to filter')
 
-
         # Step 5: Apply smoothing to the basin
         smoothed_basin = processing.run('native:smoothgeometry', {
             'INPUT': largest_polygon,
@@ -263,16 +278,6 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         Outputs:
             Output Basin: A polygon layer representing the delineated watershed basin
             Output Basin Stream Network: Optional. A line layer representing the clipped stream network within the basin
-        
-        The algorithm performs the following steps:
-        1. Checks and resamples the DEM if necessary
-        2. Fills sinks in the DEM
-        3. Calculates flow direction and accumulation
-        4. Delineates the watershed based on the pour point
-        5. Converts the raster watershed to a vector polygon
-        6. Keeps only the largest polygon (main watershed)
-        7. Applies smoothing to the basin boundary
-        8. Clips the input stream network to the basin boundary (if provided)
         
         Note: The accuracy of the watershed delineation depends on the resolution and quality of the input DEM.
         """)

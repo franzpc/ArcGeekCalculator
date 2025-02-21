@@ -2,10 +2,9 @@ from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterFeatureSour
                        QgsProcessingParameterBoolean, QgsProcessingParameterVectorDestination, 
                        QgsProcessing, QgsProcessingException, QgsField, QgsFeature,
                        QgsVectorLayer, QgsFeatureRequest, QgsVectorFileWriter, 
-                       QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject, 
-                       QgsProcessingProvider, QgsProcessingParameterNumber, 
-                       QgsProcessingParameterCrs, QgsCsException, QgsWkbTypes, QgsFields,
-                       QgsGeometry, QgsFeatureSink, QgsProcessingUtils)
+                       QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject, QgsProcessingProvider, 
+                       QgsProcessingParameterNumber, QgsProcessingParameterCrs, QgsCsException, QgsWkbTypes, QgsGeometry, 
+                       QgsFeatureSink, QgsProcessingUtils)
 from qgis.PyQt.QtCore import QVariant, QCoreApplication
 import traceback
 import os
@@ -243,11 +242,11 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
                             attrs['DD_Lat'] = round(point_wgs84.y(), precision)
                             attrs['DD_Lon'] = round(point_wgs84.x(), precision)
                         if format_dms:
-                            attrs['DMS_Lat'] = convert_to_dms(point_wgs84.y(), 'lat')
-                            attrs['DMS_Lon'] = convert_to_dms(point_wgs84.x(), 'lon')
+                            attrs['DMS_Lat'] = convert_to_dms(point_wgs84.y(), 'lat', precision)
+                            attrs['DMS_Lon'] = convert_to_dms(point_wgs84.x(), 'lon', precision)
                         if format_dms2:
-                            attrs['Lat_DMS'] = convert_to_dms2(point_wgs84.y(), 'lat')
-                            attrs['Lon_DMS'] = convert_to_dms2(point_wgs84.x(), 'lon')
+                            attrs['Lat_DMS'] = convert_to_dms2(point_wgs84.y(), 'lat', precision)
+                            attrs['Lon_DMS'] = convert_to_dms2(point_wgs84.x(), 'lon', precision)
                         
                         # Prepare attribute map for the feature
                         feature_attr_map = {}
@@ -312,11 +311,11 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
                         new_feature.setAttribute('DD_Lat', round(point_wgs84.y(), precision))
                         new_feature.setAttribute('DD_Lon', round(point_wgs84.x(), precision))
                     if format_dms:
-                        new_feature.setAttribute('DMS_Lat', convert_to_dms(point_wgs84.y(), 'lat'))
-                        new_feature.setAttribute('DMS_Lon', convert_to_dms(point_wgs84.x(), 'lon'))
+                        new_feature.setAttribute('DMS_Lat', convert_to_dms(point_wgs84.y(), 'lat', precision))
+                        new_feature.setAttribute('DMS_Lon', convert_to_dms(point_wgs84.x(), 'lon', precision))
                     if format_dms2:
-                        new_feature.setAttribute('Lat_DMS', convert_to_dms2(point_wgs84.y(), 'lat'))
-                        new_feature.setAttribute('Lon_DMS', convert_to_dms2(point_wgs84.x(), 'lon'))
+                        new_feature.setAttribute('Lat_DMS', convert_to_dms2(point_wgs84.y(), 'lat', precision))
+                        new_feature.setAttribute('Lon_DMS', convert_to_dms2(point_wgs84.x(), 'lon', precision))
                     
                     sink.addFeature(new_feature, QgsFeatureSink.FastInsert)
                     feedback.setProgress(int((current + 1) / total_features * 100))
@@ -329,34 +328,34 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
             feedback.pushInfo(traceback.format_exc())
             raise
 
-
-def convert_to_dms(decimal_degree, coord_type):
+def convert_to_dms(decimal_degree, coord_type, precision):
+    # Converts decimal degrees to DMS format with dynamic precision
     is_positive = decimal_degree >= 0
     decimal_degree = abs(decimal_degree)
     degrees = int(decimal_degree)
     minutes = int((decimal_degree - degrees) * 60)
-    seconds = round((decimal_degree - degrees - minutes / 60) * 3600, 2)
+    seconds = round((decimal_degree - degrees - minutes / 60) * 3600, precision)
     if coord_type == 'lat':
         direction = 'N' if is_positive else 'S'
     else:
         direction = 'E' if is_positive else 'W'
+    # Format seconds with dynamic precision
+    seconds_formatted = f"{seconds:0{precision+3}.{precision}f}"
+    return f"{degrees:2d}° {minutes:02d}' {seconds_formatted}\" {direction}"
 
-    return f"{degrees:2d}° {minutes:02d}' {seconds:05.2f}\" {direction}"
-
-
-
-def convert_to_dms2(decimal_degree, coord_type):
+def convert_to_dms2(decimal_degree, coord_type, precision):
+    # Converts decimal degrees to alternative DMS format with dynamic precision
     is_positive = decimal_degree >= 0
     decimal_degree = abs(decimal_degree)
     degrees = int(decimal_degree)
     minutes = int((decimal_degree - degrees) * 60)
-    seconds = round((decimal_degree - degrees - minutes / 60) * 3600, 2)
+    seconds = round((decimal_degree - degrees - minutes / 60) * 3600, precision)
     if coord_type == 'lat':
         direction = 'N' if is_positive else 'S'
     else:
         direction = 'E' if is_positive else 'W'
-
-    return f"{direction} {degrees:2d}° {minutes:02d}' {seconds:05.2f}\""
+    seconds_formatted = f"{seconds:0{precision+3}.{precision}f}"
+    return f"{direction} {degrees:2d}° {minutes:02d}' {seconds_formatted}\""
 
 class ArcGeekCalculatorProvider(QgsProcessingProvider):
     def loadAlgorithms(self):

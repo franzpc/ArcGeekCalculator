@@ -1,10 +1,10 @@
 # ArcGeek Calculator Plugin
-Version 2.7beta
+Version 2.8beta
 
-ArcGeek Calculator is a comprehensive QGIS plugin that provides various hydrological, geomorphological, and spatial analysis tools. This version introduces new tools for Global Curve Number calculation, 3D CAD exports, along with existing tools for kriging analysis, satellite index calculation, basemap management, and more.
+ArcGeek Calculator is a comprehensive QGIS plugin that provides various hydrological, geomorphological, and spatial analysis tools. This version introduces a new Topographic Profile tool, along with existing tools for Global Curve Number calculation, 3D CAD exports, kriging analysis, satellite index calculation, basemap management, and more.
 
 ## Description
-ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, and 3D CAD integration in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, and anyone working with spatial data.
+ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, 3D CAD integration, and topographic profiling in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, and anyone working with spatial data.
 
 ## Key Features
 
@@ -25,26 +25,35 @@ ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools f
 10. Watershed Morphometric Analysis: Perform a comprehensive morphometric analysis of a watershed, calculating various parameters and providing their interpretations.
 11. Calculate Global Curve Number: Calculate CN values using global datasets for hydrological analysis.
 
+### Terrain Analysis
+12. Topographic Profile: Generate interactive topographic profiles from lines and DEMs, with features including:
+    - Optional point labeling with customizable distance threshold
+    - Automatic profile smoothing based on total distance
+    - Interactive HTML output with downloadable point data
+    - Profile area visualization with modern color scheme
+    - Detailed elevation statistics and distance measurements
+
 ### Land Analysis and Raster Processing
-12. Land Use Change Detection: Analyze changes in land use between two time periods.
-13. Weighted Sum Analysis: Perform weighted sum analysis on multiple raster layers.
-14. Optimized Parcel Division: Divide rectangular parcels into lots of specified width.
-15. Dam Flood Simulation: Simulate flooding based on a DEM and specified water level.
+13. Land Use Change Detection: Analyze changes in land use between two time periods.
+14. Weighted Sum Analysis: Perform weighted sum analysis on multiple raster layers.
+15. Optimized Parcel Division: Divide rectangular parcels into lots of specified width.
+16. Dam Flood Simulation: Simulate flooding based on a DEM and specified water level.
 
 ### Advanced Analysis and Remote Sensing
-16. Kriging Analysis: Perform spatial interpolation using Kriging (requires external libraries).
-17. Satellite Index Calculator: Calculate various satellite indices (NDVI, NDWI, etc.) for different satellites.
+17. Kriging Analysis: Perform spatial interpolation using Kriging (requires external libraries).
+18. Satellite Index Calculator: Calculate various satellite indices (NDVI, NDWI, etc.) for different satellites.
 
 ### Data Management and Export
-18. Basemap Manager: Add and manage basemaps from Google Maps, Esri, Bing, and others.
-19. Screen Capture: Capture and georeference the current map view.
-20. Export to CSV: Export vector layer attributes to CSV format compatible with Excel.
-21. Export Contours to 3D CAD: Export contour lines to DXF format preserving elevation values, making them compatible with AutoCAD, Civil 3D, BricsCAD, and other CAD software.
+19. Basemap Manager: Add and manage basemaps from Google Maps, Esri, Bing, and others.
+20. Screen Capture: Capture and georeference the current map view.
+21. Export to CSV: Export vector layer attributes to CSV format compatible with Excel.
+22. Export Contours to 3D CAD: Export contour lines to DXF format preserving elevation values, making them compatible with AutoCAD, Civil 3D, BricsCAD, and other CAD software.
 
 ## External Libraries
 Some tools in this plugin require external libraries:
 - Kriging Analysis: Requires pykrige and scipy
 - Hypsometric Curve (part of Watershed Morphometric Analysis): Interactive version requires plotly and numpy
+- Topographic Profile: Requires plotly
 
 ## Support
 If you encounter any issues or have any suggestions, please open an issue on our [issue tracker](https://github.com/franzpc/ArcGeekCalculator/issues).
@@ -63,6 +72,8 @@ This project is licensed under the GNU General Public License v2.0 or later. See
 ArcGeek
 
 ## Version History
+
+2.8beta: Added Topographic Profile tool with interactive visualization and point labeling capabilities.
 
 2.7beta: Added snapping and bug fixes for watershed delimitation.
 

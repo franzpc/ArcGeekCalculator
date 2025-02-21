@@ -1,8 +1,8 @@
 [general]
 name=ArcGeek Calculator
 qgisMinimumVersion=3.34
-description=ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, and 3D CAD integration in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, and anyone working with spatial data.
-version=2.7beta
+description=ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, 3D CAD integration, and topographic profiling in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, and anyone working with spatial data.
+version=2.8beta
 author=ArcGeek
 email=soporte@arcgeek.com
 about=Developed by Franz Pucha-Cofrep, 2024. This plugin provides a suite of tools for GIS analysts, cartographers, surveyors, hydrologists, urban planners, and anyone working with spatial data:
@@ -28,7 +28,8 @@ about=Developed by Franz Pucha-Cofrep, 2024. This plugin provides a suite of too
     18. Screen Capture: Capture and georeference the current map view.
     19. Export to CSV: Export vector layer attributes to CSV format compatible with Excel.
     20. Calculate Global Curve Number: Calculate CN values using global datasets for hydrological analysis.
-    21. Export c to 3D CAD: Export contour lines to DXF format preserving elevation values, making them compatible with AutoCAD, Civil 3D, BricsCAD, and other CAD software.
+    21. Export Contours to 3D CAD: Export contour lines to DXF format preserving elevation values, making them compatible with AutoCAD, Civil 3D, BricsCAD, and other CAD software.
+    22. Topographic Profile: Generate interactive topographic profiles from lines and DEMs, with optional point labeling and advanced visualization features.
 
 ## How to cite?
 
@@ -36,13 +37,12 @@ If you use ArcGeek Calculator in your research or projects, please cite it as fo
 
 Pucha-Cofrep, Franz. (2024). ArcGeek Calculator (Version 2.x) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
 
-
 tracker=https://github.com/franzpc/ArcGeekCalculator/issues
 repository=https://github.com/franzpc/ArcGeekCalculator
 homepage=https://arcgeek.com/
 donation=https://paypal.me/ArcGeek
 license=GPL-2.0-or-later
-tags=coordinates, calculator, cn, cad, contour lines, elevation,  curve number, analysis, conversion, dms, decimal degrees, line generation, xy navigation, watershed analysis, stream order, basin delineation, area calculation, perimeter calculation, xy coordinates, land use change, weighted sum, parcel division, line from coordinates, flood simulation, dam, kriging, satellite index, basemap, google maps, esri, bing, screen capture, csv export, hidrology
+tags=coordinates, calculator, cn, cad, contour lines, elevation, curve number, analysis, conversion, dms, decimal degrees, line generation, xy navigation, watershed analysis, stream order, basin delineation, area calculation, perimeter calculation, xy coordinates, land use change, weighted sum, parcel division, line from coordinates, flood simulation, dam, kriging, satellite index, basemap, google maps, esri, bing, screen capture, csv export, hidrology, topographic profile
 category=Analysis
 icon=icon.png
 experimental=False

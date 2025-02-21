@@ -25,6 +25,7 @@ from .scripts.screen_capture import ScreenCaptureDialog, run_screen_capture
 from .scripts.calculate_angles_algorithm import CalculateAnglesAlgorithm
 from .scripts.global_cn_calculator import GlobalCNCalculator
 from .scripts.contour_export_algorithm import ContourExportAlgorithm
+from .scripts.topographic_profile import TopographicProfileAlgorithm
 
 class ArcGeekCalculator:
     def __init__(self, iface: QgisInterface):
@@ -65,6 +66,7 @@ class ArcGeekCalculator:
             'angles': CalculateAnglesAlgorithm(),
             'global_cn': GlobalCNCalculator(),
             'contour_export': ContourExportAlgorithm(),
+            'topographic_profile': TopographicProfileAlgorithm(),
             'basemap_manager': BasemapManager(self.iface)
         }
 
@@ -90,6 +92,7 @@ class ArcGeekCalculator:
         self.add_action("Export Contours to 3D CAD", self.run_algorithm('contour_export'), os.path.join(self.plugin_dir, "icons/contour_export3DCAD.png"))
         self.add_action("Optimized Parcel Division", self.run_algorithm('optimized_parcel_division'), os.path.join(self.plugin_dir, "icons/parcel_division.png"))
         self.add_separator()
+        self.add_action("Topographic Profile", self.run_algorithm('topographic_profile'), os.path.join(self.plugin_dir, "icons/topo_profile.png"))
         self.add_action("Manage Basemaps (Google, Bing, Esri)", self.run_basemap_manager, os.path.join(self.plugin_dir, "icons/basemap.png"))
         self.add_action("Screen Capture", self.run_screen_capture, os.path.join(self.plugin_dir, "icons/screen_capture.png"))
         self.add_action("Satellite Index Calculator", self.run_algorithm('satellite_index'), os.path.join(self.plugin_dir, "icons/satellite_index.png"))
