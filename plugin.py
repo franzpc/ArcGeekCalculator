@@ -26,6 +26,9 @@ from .scripts.calculate_angles_algorithm import CalculateAnglesAlgorithm
 from .scripts.global_cn_calculator import GlobalCNCalculator
 from .scripts.contour_export_algorithm import ContourExportAlgorithm
 from .scripts.topographic_profile import TopographicProfileAlgorithm
+from .scripts.least_cost_path_finder import LeastCostPathFinder
+from .scripts.tree_planting_pattern_algorithm import TreePlantingPatternAlgorithm
+from .scripts.enhanced_classification_algorithm import EnhancedClassificationAlgorithm
 
 class ArcGeekCalculator:
     def __init__(self, iface: QgisInterface):
@@ -67,7 +70,10 @@ class ArcGeekCalculator:
             'global_cn': GlobalCNCalculator(),
             'contour_export': ContourExportAlgorithm(),
             'topographic_profile': TopographicProfileAlgorithm(),
-            'basemap_manager': BasemapManager(self.iface)
+            'least_cost_path': LeastCostPathFinder(),
+            'basemap_manager': BasemapManager(self.iface),
+            'tree_planting_pattern': TreePlantingPatternAlgorithm(),
+            'enhanced_classification': EnhancedClassificationAlgorithm()
         }
 
         self.add_action("Calculate Point Coordinates", self.run_algorithm('coordinate'), os.path.join(self.plugin_dir, "icons/calculate_xy.png"))
@@ -78,6 +84,7 @@ class ArcGeekCalculator:
         self.add_action("Lines to Ordered Points", self.run_algorithm('lines_to_ordered_points'), os.path.join(self.plugin_dir, "icons/lines_to_points.png"))
         self.add_action("Azimuth and Distance from Coordinates and Table", self.run_algorithm('calculate_line'), os.path.join(self.plugin_dir, "icons/calculate_line.png"))
         self.add_action("Export to CSV (Excel compatible)", self.run_algorithm('export_to_csv'), os.path.join(self.plugin_dir, "icons/export_csv.png"))
+        self.add_action("Tree Planting Pattern Generator", self.run_algorithm('tree_planting_pattern'),                os.path.join(self.plugin_dir, "icons/tree_planting.png"))
         self.add_separator()
         self.add_action("Stream Network with Order", self.run_algorithm('watershed_stream'), os.path.join(self.plugin_dir, "icons/watershed_network.png"))
         self.add_action("Watershed Basin Delineation", self.run_algorithm('watershed_basin'), os.path.join(self.plugin_dir, "icons/watershed_basin.png"))
@@ -86,6 +93,7 @@ class ArcGeekCalculator:
         self.add_separator()
         self.add_action("Land Use Change Detection", self.run_algorithm('land_use_change'), os.path.join(self.plugin_dir, "icons/land_use_change.png"))
         self.add_action("Weighted Sum", self.run_algorithm('weighted_sum'), os.path.join(self.plugin_dir, "icons/weighted_sum.png"))
+        self.add_action("Least Cost Path Finder", self.run_algorithm('least_cost_path'), os.path.join(self.plugin_dir, "icons/least_cost_path.png"))
         self.add_action("Dam Flood Simulation", self.run_algorithm('dam_flood_simulation'), os.path.join(self.plugin_dir, "icons/dam_flood.png"))
         self.add_action("Kriging Analysis", self.run_algorithm('kriging_analysis'), os.path.join(self.plugin_dir, "icons/kriging.png"))
         self.add_separator()
@@ -96,6 +104,7 @@ class ArcGeekCalculator:
         self.add_action("Manage Basemaps (Google, Bing, Esri)", self.run_basemap_manager, os.path.join(self.plugin_dir, "icons/basemap.png"))
         self.add_action("Screen Capture", self.run_screen_capture, os.path.join(self.plugin_dir, "icons/screen_capture.png"))
         self.add_action("Satellite Index Calculator", self.run_algorithm('satellite_index'), os.path.join(self.plugin_dir, "icons/satellite_index.png"))
+        self.add_action("Enhanced Image Classification", self.run_algorithm('enhanced_classification'), os.path.join(self.plugin_dir, "icons/classification.png"))
         self.add_separator()
         self.add_action("Go to XY", self.run_go_to_xy, os.path.join(self.plugin_dir, "icons/gotoXY.png"))
 

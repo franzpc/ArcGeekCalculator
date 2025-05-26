@@ -1,48 +1,80 @@
 [general]
 name=ArcGeek Calculator
 qgisMinimumVersion=3.34
-description=ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, 3D CAD integration, and topographic profiling in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, and anyone working with spatial data.
-version=2.8beta
+description=ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, 3D CAD integration, topographic profiling, machine learning classification, path optimization, and forestry planning in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, foresters, and anyone working with spatial data.
+version=3.0beta
 author=ArcGeek
 email=soporte@arcgeek.com
-about=Developed by Franz Pucha-Cofrep, 2024. This plugin provides a suite of tools for GIS analysts, cartographers, surveyors, hydrologists, urban planners, and anyone working with spatial data:
-# Key Features
+about=Developed by Franz Pucha-Cofrep, 2024. This plugin provides a suite of tools for GIS analysts, cartographers, surveyors, hydrologists, urban planners, foresters, and anyone working with spatial data:
 
+# Key Features - Version 3.0
+
+## NEW in Version 3.0:
+    - Enhanced Image Classification: Advanced machine learning classification with Random Forest, SVM, GMM, and KNN algorithms, including scientific accuracy assessment and comprehensive HTML reports
+    - Least Cost Path Finder: Advanced path optimization with multiple optimization levels, flat terrain sensitivity, and support for drainage analysis, hiking trails, and utility corridors
+    - Tree Planting Pattern Generator: Generate optimal planting patterns (Triangular/Quincunx, Rectangular/Square, Five of Diamonds) for forestry and agricultural planning
+
+## Geometric and Coordinate Tools:
     1. Calculate Coordinates: Add XY coordinates to point layers, convert to Decimal Degrees, and provide two formats of Degrees Minutes Seconds.
     2. Calculate Line Geometry: Calculate length and azimuth for line features.
     3. Calculate Polygon Geometry: Calculate area and perimeter for polygon features.
-    4. Go to XY: Quickly navigate to specific coordinates on the map and optionally create point markers.
-    5. Extract Ordered Points from Polygons: Extract and order points from the vertices of input polygons with bi-directional numbering.
-    6. Lines to Ordered Points: Convert line features to ordered point features.
-    7. Calculate Line from Coordinates and Table: Generate a line and points from starting coordinates and a table of distances and angles.
-    8. Stream Network with Order: Generate a stream network with Strahler order.
-    9. Watershed Basin Delineation: Delineate watershed basins from a DEM and pour points.
-    10. Watershed Morphometric Analysis: Perform a comprehensive morphometric analysis of a watershed, calculating various parameters and providing their interpretations.
-    11. Land Use Change Detection: Analyze changes in land use between two time periods.
-    12. Weighted Sum Analysis: Perform weighted sum analysis on multiple raster layers.
-    13. Optimized Parcel Division: Divide rectangular parcels into lots of specified width.
-    14. Dam Flood Simulation: Simulate flooding based on a DEM and specified water level.
-    15. Kriging Analysis: Perform spatial interpolation using Kriging (requires external libraries).
-    16. Satellite Index Calculator: Calculate various satellite indices (NDVI, NDWI, etc.) for different satellites.
-    17. Basemap Manager: Add and manage basemaps from Google Maps, Esri, Bing, and others.
-    18. Screen Capture: Capture and georeference the current map view.
-    19. Export to CSV: Export vector layer attributes to CSV format compatible with Excel.
-    20. Calculate Global Curve Number: Calculate CN values using global datasets for hydrological analysis.
-    21. Export Contours to 3D CAD: Export contour lines to DXF format preserving elevation values, making them compatible with AutoCAD, Civil 3D, BricsCAD, and other CAD software.
-    22. Topographic Profile: Generate interactive topographic profiles from lines and DEMs, with optional point labeling and advanced visualization features.
+    4. Calculate Angles: Calculate internal and external angles at vertices of lines or polygons.
+    5. Go to XY: Quickly navigate to specific coordinates on the map and optionally create point markers.
+
+## Point and Line Processing:
+    6. Extract Ordered Points from Polygons: Extract and order points from the vertices of input polygons with bi-directional numbering.
+    7. Lines to Ordered Points: Convert line features to ordered point features.
+    8. Calculate Line from Coordinates and Table: Generate a line and points from starting coordinates and a table of distances and angles.
+
+## Hydrological Analysis:
+    9. Stream Network with Order: Generate a stream network with Strahler order.
+    10. Watershed Basin Delineation: Delineate watershed basins from a DEM and pour points with main channel extension.
+    11. Watershed Morphometric Analysis: Perform a comprehensive morphometric analysis of a watershed, calculating various parameters and providing their interpretations.
+    12. Calculate Global Curve Number: Calculate CN values using global datasets for hydrological analysis.
+
+## Terrain and Topographic Analysis:
+    13. Topographic Profile: Generate interactive topographic profiles from lines and DEMs with advanced visualization.
+    14. Least Cost Path Finder: Advanced path optimization for drainage channels, hiking trails, utility lines, and irrigation planning.
+
+## Land Analysis and Raster Processing:
+    15. Land Use Change Detection: Analyze changes in land use between two time periods.
+    16. Weighted Sum Analysis: Perform weighted sum analysis on multiple raster layers.
+    17. Optimized Parcel Division: Divide rectangular parcels into lots of specified width.
+    18. Dam Flood Simulation: Simulate flooding based on a DEM and specified water level.
+
+## Machine Learning and Advanced Analysis:
+    19. Enhanced Image Classification: Machine learning classification with scientific accuracy assessment.
+    20. Kriging Analysis: Perform spatial interpolation using Kriging (requires external libraries).
+    21. Satellite Index Calculator: Calculate various satellite indices (NDVI, NDWI, etc.) for different satellites.
+
+## Forestry and Agricultural Planning:
+    22. Tree Planting Pattern Generator: Generate optimal tree planting patterns with comparative density analysis.
+
+## Data Management and Export:
+    23. Basemap Manager: Add and manage basemaps from Google Maps, Esri, Bing, and others.
+    24. Screen Capture: Capture and georeference the current map view.
+    25. Export to CSV: Export vector layer attributes to CSV format compatible with Excel.
+    26. Export Contours to 3D CAD: Export contour lines to DXF format preserving elevation values.
+
+## External Dependencies:
+Some tools require additional Python packages:
+- Enhanced Image Classification: scikit-learn, numpy (matplotlib, seaborn for full reports)
+- Kriging Analysis: pykrige, scipy
+- Topographic Profile: plotly
+- Hypsometric Curves: plotly, numpy
 
 ## How to cite?
 
 If you use ArcGeek Calculator in your research or projects, please cite it as follows:
 
-Pucha-Cofrep, Franz. (2024). ArcGeek Calculator (Version 2.x) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
+Pucha-Cofrep, Franz. (2024). ArcGeek Calculator (Version 3.x) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
 
 tracker=https://github.com/franzpc/ArcGeekCalculator/issues
 repository=https://github.com/franzpc/ArcGeekCalculator
 homepage=https://arcgeek.com/
 donation=https://paypal.me/ArcGeek
 license=GPL-2.0-or-later
-tags=coordinates, calculator, cn, cad, contour lines, elevation, curve number, analysis, conversion, dms, decimal degrees, line generation, xy navigation, watershed analysis, stream order, basin delineation, area calculation, perimeter calculation, xy coordinates, land use change, weighted sum, parcel division, line from coordinates, flood simulation, dam, kriging, satellite index, basemap, google maps, esri, bing, screen capture, csv export, hidrology, topographic profile
+tags=coordinates, calculator, cn, cad, contour lines, elevation, scp, curve number, analysis, conversion, dms, decimal degrees, line generation, xy navigation, watershed analysis, stream order, basin delineation, area calculation, perimeter calculation, xy coordinates, land use change, weighted sum, parcel division, line from coordinates, flood simulation, dam, kriging, satellite index, basemap, google maps, esri, bing, screen capture, csv export, hidrology, topographic profile, machine learning, classification, path optimization, least cost path, tree planting, forestry, agricultural planning, image classification, semi-automatic classification, random forest, support vector machine
 category=Analysis
 icon=icon.png
 experimental=False

@@ -4,10 +4,12 @@ from qgis.core import (QgsProcessing, QgsFeatureSink, QgsProcessingAlgorithm,
                        QgsProcessingParameterRasterLayer, QgsProcessingParameterField,
                        QgsVectorLayer, QgsRasterLayer, QgsFeature, QgsGeometry, QgsField,
                        QgsWkbTypes, QgsRasterBandStats, QgsPoint, QgsPointXY,
-                       QgsFields, QgsProcessingParameterNumber, QgsProcessingUtils)
+                       QgsFields, QgsProcessingParameterNumber, QgsProcessingUtils,
+                       QgsProcessingParameterFileDestination)
 import processing
 import math
 import os
+import webbrowser
 from .basin_processes import calculate_parameters, get_basin_area_interpretation, get_mean_slope_interpretation
 from .hypsometric_curve import generate_hypsometric_curve
 
@@ -18,6 +20,7 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
     STREAM_ORDER_FIELD = 'STREAM_ORDER_FIELD'
     PRECISION = 'PRECISION'
     OUTPUT = 'OUTPUT'
+    OUTPUT_HYPSOMETRIC = 'OUTPUT_HYPSOMETRIC'
 
     def initAlgorithm(self, config=None):
         self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT_BASIN, 'Basin layer', [QgsProcessing.TypeVectorPolygon]))
@@ -25,29 +28,40 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterField(self.STREAM_ORDER_FIELD, 'Field containing stream order (Strahler)', optional=False, parentLayerParameterName=self.INPUT_STREAMS))
         self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_DEM, 'Digital Elevation Model'))
         self.addParameter(QgsProcessingParameterNumber(self.PRECISION, 'Decimal precision', type=QgsProcessingParameterNumber.Integer, minValue=0, maxValue=15, defaultValue=4))
+        
         self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT, 'Output Report', QgsProcessing.TypeVector))
+        self.addParameter(
+            QgsProcessingParameterFileDestination(
+                self.OUTPUT_HYPSOMETRIC,
+                'Hypsometric Curve Output',
+                'HTML files (*.html)',
+                defaultValue=None,
+                optional=True
+            )
+        )
 
     def processAlgorithm(self, parameters, context, feedback):
         try:
+            # Get input parameters
             basin_layer = self.parameterAsVectorLayer(parameters, self.INPUT_BASIN, context)
             streams_layer = self.parameterAsVectorLayer(parameters, self.INPUT_STREAMS, context)
             dem_layer = self.parameterAsRasterLayer(parameters, self.INPUT_DEM, context)
             stream_order_field = self.parameterAsString(parameters, self.STREAM_ORDER_FIELD, context)
             precision = self.parameterAsInt(parameters, self.PRECISION, context)
+            output_hypsometric = self.parameterAsFileOutput(parameters, self.OUTPUT_HYPSOMETRIC, context)
 
-            feedback.pushInfo(f"Basin layer: {basin_layer.name()}")
-            feedback.pushInfo(f"Streams layer: {streams_layer.name()}")
-            feedback.pushInfo(f"DEM layer: {dem_layer.name()}")
-            feedback.pushInfo(f"Stream order field: {stream_order_field}")
-
+            # Validate input layers
             if not basin_layer.isValid() or not streams_layer.isValid() or not dem_layer.isValid():
                 feedback.reportError('One or more input layers are invalid')
                 return {}
 
             if basin_layer.crs() != streams_layer.crs() or basin_layer.crs() != dem_layer.crs():
-                feedback.reportError('Input layers have different Coordinate Reference Systems (CRS). Please ensure all layers have the same CRS.')
+                feedback.reportError('Input layers have different Coordinate Reference Systems (CRS)')
                 return {}
 
+            feedback.pushInfo('Processing morphometric analysis...')
+
+            # Process DEM and calculate slope
             dem_clipped = self.clip_dem_by_basin(dem_layer, basin_layer, context, feedback)
             slope_layer = self.calculate_slope(dem_clipped, context, feedback)
             slope_stats = self.get_slope_statistics(slope_layer, context, feedback)
@@ -55,68 +69,67 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
             mean_slope_degrees = slope_stats['MEAN']
             mean_slope_percent = math.tan(math.radians(mean_slope_degrees)) * 100
 
-            feedback.pushInfo(f"Mean slope (degrees): {mean_slope_degrees}")
-            feedback.pushInfo(f"Mean slope (percent): {mean_slope_percent}")
-
-            # Calculate the pour point (upstream point of the main channel)
+            # Get basin points
             pour_point, upstream_point, downstream_point = self.calculate_pour_point(streams_layer, stream_order_field)
             
-            feedback.pushInfo(f"Pour point: {pour_point.asWkt()}")
-            feedback.pushInfo(f"Upstream point: {upstream_point.asWkt()}")
-            feedback.pushInfo(f"Downstream point: {downstream_point.asWkt()}")
-
+            # Calculate parameters
             results = calculate_parameters(basin_layer, streams_layer, dem_clipped, pour_point, stream_order_field, mean_slope_degrees, feedback)
             
             if results is None:
-                feedback.reportError("Failed to calculate basin parameters.")
+                feedback.reportError("Failed to calculate basin parameters")
                 return {}
 
+            # Set up output fields
             fields = QgsFields()
             fields.append(QgsField("Parameter", QVariant.String))
             fields.append(QgsField("Value", QVariant.Double))
             fields.append(QgsField("Unit", QVariant.String))
             fields.append(QgsField("Interpretation", QVariant.String))
 
+            # Create output sink
             sink, dest_id = self.parameterAsSink(parameters, self.OUTPUT, context, fields, QgsWkbTypes.Point, basin_layer.crs())
 
+            # Add results to sink
             for param, details in results.items():
                 feature = QgsFeature()
                 feature.setFields(fields)
-                
                 feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(pour_point)))
-                
                 feature.setAttribute("Parameter", param)
                 feature.setAttribute("Value", round(details['value'], precision))
                 feature.setAttribute("Unit", details['unit'])
                 feature.setAttribute("Interpretation", details['interpretation'])
                 sink.addFeature(feature, QgsFeatureSink.FastInsert)
 
-            feedback.pushInfo("Output report generated successfully.")
-
             # Generate hypsometric curve
-            temp_output_folder = QgsProcessingUtils.tempFolder()
-            hypsometric_results = generate_hypsometric_curve(dem_clipped, basin_layer, temp_output_folder, feedback)
+            hypsometric_output_dir = os.path.dirname(output_hypsometric) if output_hypsometric else QgsProcessingUtils.tempFolder()
+            hypsometric_results = generate_hypsometric_curve(dem_clipped, basin_layer, hypsometric_output_dir, feedback)
 
-            # Add Hypsometric Integral to the results table
+            # Add Hypsometric Integral to results
             if hypsometric_results and 'HI' in hypsometric_results and 'STAGE' in hypsometric_results:
                 hi_feature = QgsFeature()
                 hi_feature.setFields(fields)
                 hi_feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(pour_point)))
-                
                 hi_feature.setAttribute("Parameter", "Hypsometric Integral (HI)")
                 hi_feature.setAttribute("Value", round(hypsometric_results['HI'], precision))
                 hi_feature.setAttribute("Unit", "dimensionless")
                 hi_feature.setAttribute("Interpretation", hypsometric_results['STAGE'])
                 sink.addFeature(hi_feature, QgsFeatureSink.FastInsert)
 
-            # Create clickable links to the output files
-            for file_type, file_path in hypsometric_results.items():
-                if file_path:
-                    feedback.pushInfo(f"{file_type}: {file_path}")
+            # Open HTML in default browser
+            if 'HTML' in hypsometric_results and hypsometric_results['HTML']:
+                try:
+                    html_path = hypsometric_results['HTML']
+                    url = 'file://' + os.path.abspath(html_path)
+                    webbrowser.open(url)
+                except Exception as e:
+                    feedback.pushInfo(f"Could not open HTML report automatically: {str(e)}")
 
-            feedback.pushInfo(f"Hypsometric curve analysis completed. Results saved in: {temp_output_folder}")
+            feedback.pushInfo('Analysis completed successfully')
 
-            return {self.OUTPUT: dest_id}
+            return {
+                self.OUTPUT: dest_id,
+                self.OUTPUT_HYPSOMETRIC: hypsometric_results.get('HTML', None)
+            }
 
         except Exception as e:
             feedback.reportError(f"An error occurred: {str(e)}")
@@ -140,23 +153,15 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
 
     def calculate_pour_point(self, streams_layer, stream_order_field):
         max_order = max([f[stream_order_field] for f in streams_layer.getFeatures()])
-        
-        # Get all segments of the main channel
         main_channel_segments = [f.geometry() for f in streams_layer.getFeatures() if f[stream_order_field] == max_order]
-
-        # Merge all segments into a single line
         main_channel = QgsGeometry.unaryUnion(main_channel_segments)
 
-        # Ensure the result is a single line
         if main_channel.isMultipart():
             main_channel = main_channel.mergeLines()
 
-        # Get the start and end points
         vertices = main_channel.asPolyline()
         upstream_point = vertices[0]
         downstream_point = vertices[-1]
-
-        # The pour point is typically the downstream point
         pour_point = downstream_point
 
         return pour_point, upstream_point, downstream_point
@@ -203,7 +208,8 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
             Decimal precision: Number of decimal places for the results (default: 4)
 
         Outputs:
-            A table with calculated morphometric parameters and their interpretations
+            Output Report: A table with calculated morphometric parameters and their interpretations
+            Hypsometric Curve Output: HTML file containing the hypsometric curve visualization
 
         Note: All input layers must have the same Coordinate Reference System (CRS).
         """

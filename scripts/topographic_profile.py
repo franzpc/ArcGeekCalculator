@@ -14,27 +14,7 @@ import urllib.parse
 import plotly.graph_objects as go
 
 class TopographicProfileAlgorithm(QgsProcessingAlgorithm):
-    """
-    Generates an interactive topographic profile from a line and a DEM, with an optional points layer.
-    The profile area is filled with a semi-transparent vibrant color and the main profile line is drawn in a vivid tone.
-    A summary paragraph is displayed below the chart.
 
-    Parameters:
-      - Input Line Layer: Vector line used to sample the DEM.
-      - Digital Elevation Model (DEM): Raster layer with elevation data.
-      - Points Layer (optional): Vector points to label on the profile.
-      - Name Field for Points (optional): Field containing point names.
-      - Maximum Distance for Points (meters): Only points within this distance from the line are considered.
-      - Apply smoothing?: If enabled (default), a moving average is applied to smooth the profile:
-            • No smoothing if total distance < 1000 m.
-            • Moderate smoothing (window = 3) if total distance is between 1000 and 10000 m.
-            • Heavy smoothing (window = 7) if total distance > 10 km.
-      - Invert profile direction?: If enabled, the profile is drawn from end to start.
-            (Note: The DEM-derived Z-values for points are always sampled directly from the DEM.)
-      - Output HTML File: Path to save the interactive HTML output.
-      
-    Note: All layers must share the same coordinate system (CRS).
-    """
 
     INPUT_LINE = 'INPUT_LINE'
     INPUT_DEM = 'INPUT_DEM'
