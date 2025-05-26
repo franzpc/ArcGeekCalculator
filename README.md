@@ -102,10 +102,9 @@ ArcGeek - Franz Pucha-Cofrep
 ## Version History
 
 **3.0**: Major update with new advanced algorithms:
-- Added Enhanced Image Classification with machine learning algorithms and scientific reporting
+- Added Enhanced Image Classification with machine learning algorithms and reporting
 - Added Least Cost Path Finder with advanced optimization options and flat terrain sensitivity
 - Added Tree Planting Pattern Generator for forestry and agricultural planning
-- Enhanced Watershed Basin Delineation with main channel extension capabilities
 - Improved overall performance and user experience
 
 **2.8beta**: Added Topographic Profile tool with interactive visualization and point labeling capabilities. Delineated watershed basin include Extend Main Channel.
