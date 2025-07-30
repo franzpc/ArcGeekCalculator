@@ -1,5 +1,5 @@
 # ArcGeek Calculator Plugin
-Version 3.0beta
+Version 3.0.1
 
 ArcGeek Calculator is a comprehensive QGIS plugin that provides various hydrological, geomorphological, spatial analysis, machine learning, and optimization tools. This version introduces new advanced algorithms including Enhanced Image Classification, Least Cost Path Finder, and Tree Planting Pattern Generator, along with existing tools for Global Curve Number calculation, 3D CAD exports, kriging analysis, satellite index calculation, basemap management, and more.
 
@@ -81,6 +81,9 @@ pip install scikit-learn numpy matplotlib seaborn
 
 # For Topographic Profile and Hypsometric Curves
 pip install plotly numpy
+
+# All in one
+pip install pykrige scipy scikit-learn numpy matplotlib seaborn plotly
 ```
 
 ## Support
@@ -101,10 +104,15 @@ ArcGeek - Franz Pucha-Cofrep
 
 ## Version History
 
+**3.0.1**: Minor improvements and bug fixes:
+- Enhanced Watershed Basin Delineation with triple stream order calculation for concentration time analysis
+- Improved Hypsometric Curve analysis with new Pixel Method (thanks to Francisco García T)
+
 **3.0**: Major update with new advanced algorithms:
-- Added Enhanced Image Classification with machine learning algorithms and reporting
+- Added Enhanced Image Classification with machine learning algorithms and scientific reporting
 - Added Least Cost Path Finder with advanced optimization options and flat terrain sensitivity
 - Added Tree Planting Pattern Generator for forestry and agricultural planning
+- Enhanced Watershed Basin Delineation with main channel extension capabilities
 - Improved overall performance and user experience
 
 **2.8beta**: Added Topographic Profile tool with interactive visualization and point labeling capabilities. Delineated watershed basin include Extend Main Channel.

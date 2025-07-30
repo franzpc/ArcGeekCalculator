@@ -3,8 +3,7 @@ from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterRasterLayer
                        QgsWkbTypes, QgsField, QgsVectorLayer, QgsFeatureSink, 
                        QgsProcessing, QgsProcessingParameterVectorLayer,
                        QgsProcessingException, QgsMessageLog, Qgis,
-                       QgsProcessingParameterNumber, QgsRasterLayer, QgsSnappingConfig,
-                       QgsProcessingParameterBoolean)
+                       QgsProcessingParameterNumber, QgsRasterLayer, QgsSnappingConfig)
 from qgis.PyQt.QtCore import QVariant, QCoreApplication
 from qgis.utils import iface
 import processing
@@ -18,7 +17,6 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
     OUTPUT_STREAM = 'OUTPUT_STREAM'
     SMOOTH_ITERATIONS = 'SMOOTH_ITERATIONS'
     SMOOTH_OFFSET = 'SMOOTH_OFFSET'
-    EXTEND_MAIN_CHANNEL = 'EXTEND_MAIN_CHANNEL'
     MAX_RASTER_SIZE = 100000000
 
     def __init__(self):
@@ -109,11 +107,23 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         return None
 
     def calculate_strahler(self, stream_layer, feedback):
-        stream_layer.startEditing()
+        feedback.pushInfo("Starting Strahler order calculation...")
         
-        if 'strah_rec' not in [field.name() for field in stream_layer.fields()]:
-            stream_layer.dataProvider().addAttributes([QgsField('strah_rec', QVariant.Int)])
+        if not stream_layer.startEditing():
+            feedback.reportError("Could not start editing stream layer")
+            return
+        
+        field_names = [field.name() for field in stream_layer.fields()]
+        if 'sthr_original' not in field_names:
+            if not stream_layer.dataProvider().addAttributes([QgsField('sthr_original', QVariant.Int)]):
+                feedback.reportError("Could not add sthr_original field")
+                return
             stream_layer.updateFields()
+        
+        for feature in stream_layer.getFeatures():
+            feature['sthr_original'] = 1
+            if not stream_layer.updateFeature(feature):
+                feedback.reportError(f"Could not update feature {feature.id()}")
         
         processed_features = {}
         
@@ -122,18 +132,24 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                 return processed_features[feature_id]
             
             feature = stream_layer.getFeature(feature_id)
+            if not feature.isValid():
+                return 1
+                
             upstream_features = self.find_upstream_features(feature, stream_layer)
             
             if not upstream_features:
                 order = 1
             else:
-                upstream_orders = [get_strahler_order(f.id()) for f in upstream_features]
-                max_order = max(upstream_orders)
-                count_max = upstream_orders.count(max_order)
-                order = max_order + 1 if count_max > 1 else max_order
+                upstream_orders = [get_strahler_order(f.id()) for f in upstream_features if f.isValid()]
+                if upstream_orders:
+                    max_order = max(upstream_orders)
+                    count_max = upstream_orders.count(max_order)
+                    order = max_order + 1 if count_max > 1 else max_order
+                else:
+                    order = 1
             
             processed_features[feature_id] = order
-            feature['strah_rec'] = order
+            feature['sthr_original'] = order
             stream_layer.updateFeature(feature)
             return order
         
@@ -142,89 +158,80 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             if not self.find_downstream_feature(feature, stream_layer):
                 outlet_features.append(feature)
         
-        if not outlet_features:
-            for feature in stream_layer.getFeatures():
-                feature['strah_rec'] = 1
-                stream_layer.updateFeature(feature)
-        else:
+        if outlet_features:
             for outlet in outlet_features:
                 get_strahler_order(outlet.id())
         
-        stream_layer.commitChanges()
+        if not stream_layer.commitChanges():
+            feedback.reportError("Could not commit changes to stream layer")
+        else:
+            feedback.pushInfo("Strahler order calculation completed")
 
     def extend_main_channel(self, stream_layer, feedback):
-        stream_layer.startEditing()
+        feedback.pushInfo("Starting main channel extension...")
         
-        if 'strah_ext' not in [field.name() for field in stream_layer.fields()]:
-            stream_layer.dataProvider().addAttributes([QgsField('strah_ext', QVariant.Int)])
+        if not stream_layer.startEditing():
+            feedback.reportError("Could not start editing stream layer for extension")
+            return
+        
+        field_names = [field.name() for field in stream_layer.fields()]
+        if 'sthr_extend' not in field_names:
+            if not stream_layer.dataProvider().addAttributes([QgsField('sthr_extend', QVariant.Int)]):
+                feedback.reportError("Could not add sthr_extend field")
+                return
             stream_layer.updateFields()
         
-        # Copy values from strah_rec to strah_ext
         for feature in stream_layer.getFeatures():
-            if feature['strah_rec'] is not None:
-                feature['strah_ext'] = feature['strah_rec']
-                stream_layer.updateFeature(feature)
+            original_value = feature['sthr_original'] if feature['sthr_original'] is not None else 1
+            feature['sthr_extend'] = original_value
+            stream_layer.updateFeature(feature)
         
-        # Find the main outlet
         outlets = []
         for feature in stream_layer.getFeatures():
             if not self.find_downstream_feature(feature, stream_layer):
                 outlets.append(feature)
         
         if not outlets:
-            stream_layer.commitChanges()
+            if not stream_layer.commitChanges():
+                feedback.reportError("Could not commit changes")
             return
             
-        main_outlet = max(outlets, key=lambda feat: feat['strah_ext'] if feat['strah_ext'] is not None else 0)
-        max_order = main_outlet['strah_ext']
+        main_outlet = max(outlets, key=lambda feat: feat['sthr_extend'] if feat['sthr_extend'] is not None else 0)
+        max_order = main_outlet['sthr_extend']
         
-        # For each order, starting from the highest
         for current_order in range(max_order, 1, -1):
-            # Find terminal segments of this order
             last_segments = []
             for feature in stream_layer.getFeatures():
-                if feature['strah_ext'] == current_order:
+                if feature['sthr_extend'] == current_order:
                     upstream_features = self.find_upstream_features(feature, stream_layer)
                     same_or_higher_order = [f for f in upstream_features 
-                                           if f['strah_ext'] >= current_order]
+                                           if f['sthr_extend'] >= current_order]
                     if not same_or_higher_order:
                         last_segments.append(feature)
             
-            if not last_segments:
-                continue
-            
-            # For each terminal segment, find all branches of the next lower order
             for last_segment in last_segments:
                 upstream_features = self.find_upstream_features(last_segment, stream_layer)
                 next_order_features = [f for f in upstream_features 
-                                      if f['strah_ext'] == current_order - 1]
+                                      if f['sthr_extend'] == current_order - 1]
                 
-                if not next_order_features:
-                    continue
-                
-                # Find all complete branches of the lower order
-                branches = []
-                for next_feature in next_order_features:
-                    branch = self.find_complete_branch(next_feature, current_order - 1, stream_layer)
-                    if branch:
-                        total_length = sum(f.geometry().length() for f in branch)
-                        branches.append((branch, total_length))
-                
-                if not branches:
-                    continue
-                
-                # Select the longest branch
-                longest_branch = max(branches, key=lambda x: x[1])[0]
-                
-                # Extend the current order to this branch
-                for feature in longest_branch:
-                    feature['strah_ext'] = current_order
-                    stream_layer.updateFeature(feature)
+                if next_order_features:
+                    branches = []
+                    for next_feature in next_order_features:
+                        branch = self.find_complete_branch(next_feature, current_order - 1, stream_layer)
+                        if branch:
+                            total_length = sum(f.geometry().length() for f in branch if f.geometry() is not None)
+                            branches.append((branch, total_length))
+                    
+                    if branches:
+                        longest_branch = max(branches, key=lambda x: x[1])[0]
+                        for feature in longest_branch:
+                            feature['sthr_extend'] = current_order
+                            stream_layer.updateFeature(feature)
         
-        stream_layer.commitChanges()
-        
-        # Run the fix hierarchy function automatically
-        self.fix_tributary_hierarchy(stream_layer, feedback)
+        if not stream_layer.commitChanges():
+            feedback.reportError("Could not commit changes for extend")
+        else:
+            feedback.pushInfo("Main channel extension completed")
 
     def find_complete_branch(self, start_feature, target_order, stream_layer, visited=None):
         if visited is None:
@@ -235,13 +242,13 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         
         visited.add(start_feature.id())
         
-        if start_feature['strah_ext'] != target_order:
+        if start_feature['sthr_extend'] != target_order:
             return []
         
         result = [start_feature]
         
         upstream_features = self.find_upstream_features(start_feature, stream_layer)
-        target_order_upstream = [f for f in upstream_features if f['strah_ext'] == target_order]
+        target_order_upstream = [f for f in upstream_features if f['sthr_extend'] == target_order]
         
         for upstream in target_order_upstream:
             branch = self.find_complete_branch(upstream, target_order, stream_layer, visited)
@@ -249,94 +256,112 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         
         return result
 
-    def fix_tributary_hierarchy(self, stream_layer, feedback):
-        stream_layer.startEditing()
+    def extend_to_headwaters(self, stream_layer, feedback):
+        feedback.pushInfo("Starting final channel extension to headwaters...")
         
-        # Create a field for the final result if it doesn't exist
-        if 'strah_final' not in [field.name() for field in stream_layer.fields()]:
-            stream_layer.dataProvider().addAttributes([QgsField('strah_final', QVariant.Int)])
+        if not stream_layer.startEditing():
+            feedback.reportError("Could not start editing stream layer for final extension")
+            return
+        
+        field_names = [field.name() for field in stream_layer.fields()]
+        if 'sthr_final' not in field_names:
+            if not stream_layer.dataProvider().addAttributes([QgsField('sthr_final', QVariant.Int)]):
+                feedback.reportError("Could not add sthr_final field")
+                return
             stream_layer.updateFields()
         
-        # Initialize all values to 1
         for feature in stream_layer.getFeatures():
-            feature['strah_final'] = 1
+            feature['sthr_final'] = 1
             stream_layer.updateFeature(feature)
         
-        # Identify all segments of the main channel
-        max_order = max(feature['strah_ext'] for feature in stream_layer.getFeatures() 
-                       if feature['strah_ext'] is not None)
-        main_channel_features = {f.id(): f for f in stream_layer.getFeatures() if f['strah_ext'] == max_order}
-        
-        # Mark main channel with the maximum order
-        for feature_id, feature in main_channel_features.items():
-            feature['strah_final'] = max_order
-            stream_layer.updateFeature(feature)
-        
-        # Build a graph of connections
-        graph = {}
+        outlets = []
         for feature in stream_layer.getFeatures():
-            fid = feature.id()
-            upstream_ids = [f.id() for f in self.find_upstream_features(feature, stream_layer)]
-            downstream = self.find_downstream_feature(feature, stream_layer)
-            downstream_id = downstream.id() if downstream else None
+            if not self.find_downstream_feature(feature, stream_layer):
+                outlets.append(feature)
+        
+        if not outlets:
+            if not stream_layer.commitChanges():
+                feedback.reportError("Could not commit changes")
+            return
             
-            graph[fid] = {'upstream': upstream_ids, 'downstream': downstream_id}
+        main_outlet = max(outlets, key=lambda feat: feat['sthr_extend'] if feat['sthr_extend'] is not None else 0)
+        max_order = main_outlet['sthr_extend'] if main_outlet['sthr_extend'] is not None else 1
         
-        # Starting from each main channel segment, assign orders to tributaries
-        for start_id in main_channel_features.keys():
-            # All segments directly connected upstream to the main channel
-            for upstream_id in graph[start_id]['upstream']:
-                if upstream_id in main_channel_features:
-                    continue  # Ignore if part of main channel
-                
-                # Process this tributary and all its upstream segments
-                queue = deque([(upstream_id, max_order - 1)])  # (id, expected_order)
-                
-                while queue:
-                    current_id, expected_order = queue.popleft()
-                    current_feature = stream_layer.getFeature(current_id)
-                    
-                    if expected_order < 1:
-                        expected_order = 1
-                    
-                    if current_feature['strah_final'] < expected_order:
-                        current_feature['strah_final'] = expected_order
-                        stream_layer.updateFeature(current_feature)
-                    
-                    next_order = expected_order - 1
-                    if next_order < 1:
-                        next_order = 1
-                        
-                    for next_id in graph[current_id]['upstream']:
-                        queue.append((next_id, next_order))
-        
-        # Second pass to verify no jumps of more than one level
-        all_changed = True
-        max_iterations = 10
-        iterations = 0
-        
-        while all_changed and iterations < max_iterations:
-            all_changed = False
-            iterations += 1
+        try:
+            main_channel_path = self.find_main_channel_to_headwater(main_outlet, stream_layer)
+            feedback.pushInfo(f"Found main channel path with {len(main_channel_path)} segments")
             
-            for feature in stream_layer.getFeatures():
-                downstream = self.find_downstream_feature(feature, stream_layer)
-                if not downstream:
-                    continue
-                
-                downstream_order = downstream['strah_final']
-                current_order = feature['strah_final']
-                
-                if current_order < downstream_order - 1 and current_order > 1:
-                    feature['strah_final'] = downstream_order - 1
-                    stream_layer.updateFeature(feature)
-                    all_changed = True
-                elif current_order == 1 and downstream_order > 2:
-                    feature['strah_final'] = 2
-                    stream_layer.updateFeature(feature)
-                    all_changed = True
+            for feature in main_channel_path:
+                feature['sthr_final'] = max_order
+                if not stream_layer.updateFeature(feature):
+                    feedback.reportError(f"Could not update feature {feature.id()}")
+        except Exception as e:
+            feedback.reportError(f"Error tracing main channel: {str(e)}")
         
-        stream_layer.commitChanges()
+        if not stream_layer.commitChanges():
+            feedback.reportError("Could not commit final changes")
+        else:
+            feedback.pushInfo("Final channel extension completed")
+
+    def find_main_channel_to_headwater(self, start_feature, stream_layer, visited=None):
+        if visited is None:
+            visited = set()
+        
+        if not start_feature or not start_feature.isValid() or start_feature.id() in visited:
+            return []
+        
+        visited.add(start_feature.id())
+        result = [start_feature]
+        
+        try:
+            upstream_features = self.find_upstream_features(start_feature, stream_layer)
+            upstream_features = [f for f in upstream_features if f.isValid()]
+            
+            if not upstream_features:
+                return result
+            
+            if len(upstream_features) == 1:
+                upstream_path = self.find_main_channel_to_headwater(upstream_features[0], stream_layer, visited)
+                result.extend(upstream_path)
+            else:
+                branches = []
+                for upstream_feature in upstream_features:
+                    if upstream_feature.id() not in visited:
+                        branch_path = self.trace_complete_path(upstream_feature, stream_layer, set())
+                        if branch_path:
+                            total_length = sum(f.geometry().length() for f in branch_path if f.geometry() is not None)
+                            branches.append((total_length, upstream_feature))
+                
+                if branches:
+                    longest_branch = max(branches, key=lambda x: x[0])
+                    upstream_path = self.find_main_channel_to_headwater(longest_branch[1], stream_layer, visited)
+                    result.extend(upstream_path)
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Error in find_main_channel_to_headwater: {str(e)}", level=Qgis.Critical)
+        
+        return result
+
+    def trace_complete_path(self, start_feature, stream_layer, visited=None):
+        if visited is None:
+            visited = set()
+        
+        if not start_feature or not start_feature.isValid() or start_feature.id() in visited:
+            return []
+        
+        visited.add(start_feature.id())
+        result = [start_feature]
+        
+        try:
+            upstream_features = self.find_upstream_features(start_feature, stream_layer)
+            upstream_features = [f for f in upstream_features if f.isValid() and f.id() not in visited]
+            
+            for upstream in upstream_features:
+                branch = self.trace_complete_path(upstream, stream_layer, visited)
+                result.extend(branch)
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Error in trace_complete_path: {str(e)}", level=Qgis.Critical)
+        
+        return result
 
     def canCancel(self):
         return True
@@ -349,17 +374,15 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_DEM, 'Input DEM'))
         self.addParameter(QgsProcessingParameterPoint(self.POUR_POINT, 'Pour Point (click on the river)'))
         self.addParameter(QgsProcessingParameterVectorLayer(self.INPUT_STREAM, 'Input Stream Network', 
-                                                            types=[QgsProcessing.TypeVectorLine], optional=True))
+                                                            types=[QgsProcessing.TypeVectorLine], optional=False))
         self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_ITERATIONS, 'Smoothing Iterations', 
                                                        type=QgsProcessingParameterNumber.Integer, 
                                                        minValue=0, maxValue=10, defaultValue=1))
         self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_OFFSET, 'Smoothing Offset', 
                                                        type=QgsProcessingParameterNumber.Double, 
                                                        minValue=0.0, maxValue=0.5, defaultValue=0.25))
-        self.addParameter(QgsProcessingParameterBoolean(self.EXTEND_MAIN_CHANNEL, 'Extend Main Channel', 
-                                                       defaultValue=False))
-        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_BASIN, 'Output Basin', QgsProcessing.TypeVectorPolygon))
-        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_STREAM, 'Output Basin Stream Network', QgsProcessing.TypeVectorLine, optional=True))
+        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_BASIN, 'Watershed Basin', QgsProcessing.TypeVectorPolygon))
+        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_STREAM, 'Basin Stream Network', QgsProcessing.TypeVectorLine))
 
     def processAlgorithm(self, parameters, context, feedback):
         dem = self.parameterAsRasterLayer(parameters, self.INPUT_DEM, context)
@@ -367,12 +390,11 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         input_stream = self.parameterAsVectorLayer(parameters, self.INPUT_STREAM, context)
         smooth_iterations = self.parameterAsInt(parameters, self.SMOOTH_ITERATIONS, context)
         smooth_offset = self.parameterAsDouble(parameters, self.SMOOTH_OFFSET, context)
-        extend_main = self.parameterAsBoolean(parameters, self.EXTEND_MAIN_CHANNEL, context)
 
         if not dem.isValid():
             raise QgsProcessingException(self.tr('Invalid input DEM'))
 
-        if input_stream and input_stream.geometryType() != QgsWkbTypes.LineGeometry:
+        if not input_stream or input_stream.geometryType() != QgsWkbTypes.LineGeometry:
             raise QgsProcessingException(self.tr('Input Stream Network must be a line layer'))
 
         original_cell_size = dem.rasterUnitsPerPixelX()
@@ -474,33 +496,31 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
 
         results = {self.OUTPUT_BASIN: dest_id}
 
-        if input_stream:
-            try:
-                clipped_stream = processing.run('native:clip', {
-                    'INPUT': input_stream,
-                    'OVERLAY': basin_layer,
-                    'OUTPUT': 'memory:'
-                }, context=context, feedback=feedback)['OUTPUT']
+        try:
+            clipped_stream = processing.run('native:clip', {
+                'INPUT': input_stream,
+                'OVERLAY': basin_layer,
+                'OUTPUT': 'memory:'
+            }, context=context, feedback=feedback)['OUTPUT']
 
-                self.calculate_strahler(clipped_stream, feedback)
-                
-                if extend_main:
-                    self.extend_main_channel(clipped_stream, feedback)
+            self.calculate_strahler(clipped_stream, feedback)
+            self.extend_main_channel(clipped_stream, feedback)
+            self.extend_to_headwaters(clipped_stream, feedback)
 
-                (stream_sink, stream_dest_id) = self.parameterAsSink(parameters, self.OUTPUT_STREAM, context,
-                                                                     clipped_stream.fields(), QgsWkbTypes.LineString, clipped_stream.crs())
-                
-                if stream_sink is None:
-                    raise QgsProcessingException(self.invalidSinkError(parameters, self.OUTPUT_STREAM))
+            (stream_sink, stream_dest_id) = self.parameterAsSink(parameters, self.OUTPUT_STREAM, context,
+                                                                 clipped_stream.fields(), QgsWkbTypes.LineString, clipped_stream.crs())
+            
+            if stream_sink is None:
+                raise QgsProcessingException(self.invalidSinkError(parameters, self.OUTPUT_STREAM))
 
-                stream_features = clipped_stream.getFeatures()
-                for feature in stream_features:
-                    stream_sink.addFeature(feature, QgsFeatureSink.FastInsert)
+            stream_features = clipped_stream.getFeatures()
+            for feature in stream_features:
+                stream_sink.addFeature(feature, QgsFeatureSink.FastInsert)
 
-                results[self.OUTPUT_STREAM] = stream_dest_id
-            except Exception as e:
-                feedback.reportError(f"Error processing stream network: {str(e)}")
-                feedback.pushInfo("Continuing with basin output only")
+            results[self.OUTPUT_STREAM] = stream_dest_id
+        except Exception as e:
+            feedback.reportError(f"Error processing stream network: {str(e)}")
+            raise QgsProcessingException(f"Error processing stream network: {str(e)}")
 
         return results
 
@@ -540,22 +560,21 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         This algorithm delineates a watershed basin based on a Digital Elevation Model (DEM) and a pour point.
         It uses GRASS GIS algorithms for hydrological analysis and watershed delineation.
         
-        If a stream network is provided, it will be clipped to the basin boundary and Strahler stream order will be calculated.
+        The stream network is required and will be clipped to the basin boundary with three Strahler stream order calculations:
+        - sthr_original: Standard Strahler order calculation
+        - sthr_extend: Extended main channel along longest paths
+        - sthr_final: Main channel extended to all headwaters
         
         Parameters:
             Input DEM: A raster layer representing the terrain elevation
             Pour Point: The outlet point of the watershed. Snapping to streams is enabled
-            Input Stream Network: Optional. A line vector layer representing the stream network
+            Input Stream Network: A line vector layer representing the stream network (required)
             Smoothing Iterations: Number of iterations for smoothing the basin boundary (0-10)
             Smoothing Offset: Offset value for smoothing (0.0-0.5)
-            Extend Main Channel: When checked, extends the main channel upstream along the longest path and fixes tributary hierarchy
             
         Outputs:
             Output Basin: A polygon layer representing the delineated watershed basin
-            Output Basin Stream Network: Optional. A line layer with Strahler order values
-            
-        Note: When using the Extend Main Channel option, the calculated Strahler orders are modified to create
-        a more consistent stream network classification for cartographic purposes.
+            Output Basin Stream Network: A line layer with three different Strahler order calculations
         """)
 
     def tr(self, string):

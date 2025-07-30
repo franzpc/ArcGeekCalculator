@@ -2,7 +2,7 @@
 name=ArcGeek Calculator
 qgisMinimumVersion=3.34
 description=ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, 3D CAD integration, topographic profiling, machine learning classification, path optimization, and forestry planning in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, foresters, and anyone working with spatial data.
-version=3.0beta
+version=3.0.1
 author=ArcGeek
 email=soporte@arcgeek.com
 about=Developed by Franz Pucha-Cofrep, 2024. This plugin provides a suite of tools for GIS analysts, cartographers, surveyors, hydrologists, urban planners, foresters, and anyone working with spatial data:

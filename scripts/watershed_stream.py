@@ -29,7 +29,7 @@ class WatershedAnalysisAlgorithm(QgsProcessingAlgorithm):
                                                        type=QgsProcessingParameterNumber.Integer, minValue=1, defaultValue=1))
         self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_OFFSET, 'Smooth Offset',
                                                        type=QgsProcessingParameterNumber.Double, minValue=0, maxValue=0.5, defaultValue=0.25))
-        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_STREAMS, 'Output Stream Network'))
+        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_STREAMS, 'Stream Network'))
 
     def processAlgorithm(self, parameters, context, feedback):
         try:

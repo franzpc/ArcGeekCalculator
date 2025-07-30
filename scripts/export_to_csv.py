@@ -1,9 +1,22 @@
-from qgis.PyQt.QtCore import QCoreApplication, QVariant
+# Qt5/Qt6 compatibility layer
+try:
+    from qgis.PyQt.QtCore import QCoreApplication, QVariant
+    QT_VERSION = "PyQt_via_QGIS"
+except ImportError:
+    try:
+        from PyQt6.QtCore import QCoreApplication, QVariant
+        QT_VERSION = "PyQt6"
+    except ImportError:
+        try:
+            from PyQt5.QtCore import QCoreApplication, QVariant
+            QT_VERSION = "PyQt5"
+        except ImportError:
+            raise ImportError("No compatible Qt version found. Please install PyQt5 or PyQt6.")
+
 from qgis.core import (QgsProcessing, QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFileDestination,
                        QgsProcessingParameterEnum, QgsProcessingException)
-from .social_media import SocialMedia
 
 import csv
 import io
@@ -49,21 +62,36 @@ class ExportToCSVAlgorithm(QgsProcessingAlgorithm):
         fields = source.fields()
         field_names = [field.name() for field in fields]
 
-        with io.open(output_file, 'w', encoding='utf-8-sig', newline='') as f:
-            if output_format == 0:  # Standard CSV
-                writer = csv.writer(f)
-            else:  # Excel compatible CSV
-                writer = csv.writer(f, dialect='excel')
+        try:
+            with io.open(output_file, 'w', encoding='utf-8-sig', newline='') as f:
+                if output_format == 0:  # Standard CSV
+                    writer = csv.writer(f)
+                else:  # Excel compatible CSV
+                    writer = csv.writer(f, dialect='excel')
+                
+                # Write header
+                writer.writerow(field_names)
+                
+                # Write data
+                for current, feature in enumerate(source.getFeatures()):
+                    if feedback.isCanceled():
+                        break
+                    
+                    # Handle null values properly
+                    attributes = []
+                    for attr in feature.attributes():
+                        if attr is None:
+                            attributes.append('')
+                        else:
+                            attributes.append(attr)
+                    
+                    writer.writerow(attributes)
+                    feedback.setProgress(int(current * total))
+
+            feedback.pushInfo(f'Successfully exported {source.featureCount()} features to {output_file}')
             
-            # Write header
-            writer.writerow(field_names)
-            
-            # Write data
-            for current, feature in enumerate(source.getFeatures()):
-                if feedback.isCanceled():
-                    break
-                writer.writerow(feature.attributes())
-                feedback.setProgress(int(current * total))
+        except Exception as e:
+            raise QgsProcessingException(f'Error writing CSV file: {str(e)}')
 
         return {self.OUTPUT: output_file}
 
@@ -80,18 +108,18 @@ class ExportToCSVAlgorithm(QgsProcessingAlgorithm):
         return 'arcgeekcalculator'
 
     def shortHelpString(self):
-        help_text = self.tr("""
+        return self.tr("""
         This algorithm exports the attributes of a vector layer to CSV format.
+        
         It offers two output options:
         1. Standard CSV: A regular comma-separated values file.
         2. Excel compatible CSV: A CSV file formatted to be easily opened in Excel.
+        
         The tool will export all attributes of the input layer, including the feature ID.
         Geometry information is not included in the output.
     
         Note: This export uses UTF-8 encoding with BOM for better compatibility with Excel.
         """)
-        return help_text + SocialMedia.social_links
-
 
     def tr(self, string):
         return QCoreApplication.translate('Processing', string)
