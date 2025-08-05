@@ -1,15 +1,21 @@
 [general]
 name=ArcGeek Calculator
 qgisMinimumVersion=3.34
+qgisMaximumVersion=3.99
 description=ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, 3D CAD integration, topographic profiling, machine learning classification, path optimization, and forestry planning in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, foresters, and anyone working with spatial data.
-version=3.0.1
+version=4.0.1
 author=ArcGeek
 email=soporte@arcgeek.com
-about=Developed by Franz Pucha-Cofrep, 2024. This plugin provides a suite of tools for GIS analysts, cartographers, surveyors, hydrologists, urban planners, foresters, and anyone working with spatial data:
+about=Developed by Franz Pucha-Cofrep, 2024-2025. This plugin provides a suite of tools for GIS analysts, cartographers, surveyors, hydrologists, urban planners, foresters, and anyone working with spatial data:
 
-# Key Features - Version 3.0
+# Key Features - Version 4.0.1
 
-## NEW in Version 3.0:
+## NEW in Version 4.0.1:
+    - Full Qt6 Compatibility: Compatible with both Qt5 and Qt6 versions of QGIS
+    - Enhanced compatibility with QGIS 3.34+ and QGIS 4.x preparation
+    - Improved stability across different QGIS versions
+
+## Core Features:
     - Enhanced Image Classification: Advanced machine learning classification with Random Forest, SVM, GMM, and KNN algorithms, including scientific accuracy assessment and comprehensive HTML reports
     - Least Cost Path Finder: Advanced path optimization with multiple optimization levels, flat terrain sensitivity, and support for drainage analysis, hiking trails, and utility corridors
     - Tree Planting Pattern Generator: Generate optimal planting patterns (Triangular/Quincunx, Rectangular/Square, Five of Diamonds) for forestry and agricultural planning
@@ -56,6 +62,11 @@ about=Developed by Franz Pucha-Cofrep, 2024. This plugin provides a suite of too
     25. Export to CSV: Export vector layer attributes to CSV format compatible with Excel.
     26. Export Contours to 3D CAD: Export contour lines to DXF format preserving elevation values.
 
+## Compatibility:
+    - Supports both Qt5 and Qt6 versions of QGIS
+    - Compatible with QGIS 3.34 through 3.99
+    - Fully tested on QGIS 3.40 (Qt5) and QGIS 3.44 (Qt6)
+
 ## External Dependencies:
 Some tools require additional Python packages:
 - Enhanced Image Classification: scikit-learn, numpy (matplotlib, seaborn for full reports)
@@ -67,15 +78,18 @@ Some tools require additional Python packages:
 
 If you use ArcGeek Calculator in your research or projects, please cite it as follows:
 
-Pucha-Cofrep, Franz. (2024). ArcGeek Calculator (Version 3.x) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
+Pucha-Cofrep, Franz. (2024-2025). ArcGeek Calculator (Version 3.1) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
 
 tracker=https://github.com/franzpc/ArcGeekCalculator/issues
 repository=https://github.com/franzpc/ArcGeekCalculator
 homepage=https://arcgeek.com/
 donation=https://paypal.me/ArcGeek
 license=GPL-2.0-or-later
-tags=coordinates, calculator, cn, cad, contour lines, elevation, scp, curve number, analysis, conversion, dms, decimal degrees, line generation, xy navigation, watershed analysis, stream order, basin delineation, area calculation, perimeter calculation, xy coordinates, land use change, weighted sum, parcel division, line from coordinates, flood simulation, dam, kriging, satellite index, basemap, google maps, esri, bing, screen capture, csv export, hidrology, topographic profile, machine learning, classification, path optimization, least cost path, tree planting, forestry, agricultural planning, image classification, semi-automatic classification, random forest, support vector machine
+tags=coordinates, calculator, cn, cad, contour lines, elevation, scp, curve number, analysis, conversion, dms, decimal degrees, line generation, xy navigation, watershed analysis, stream order, basin delineation, area calculation, perimeter calculation, xy coordinates, land use change, weighted sum, parcel division, line from coordinates, flood simulation, dam, kriging, satellite index, basemap, google maps, esri, bing, screen capture, csv export, hidrology, topographic profile, machine learning, classification, path optimization, least cost path, tree planting, forestry, agricultural planning, image classification, semi-automatic classification, random forest, support vector machine, qt5, qt6, compatibility
 category=Analysis
 icon=icon.png
 experimental=False
 deprecated=False
+hasProcessingProvider=yes
+server=False
+supportsQt6=True

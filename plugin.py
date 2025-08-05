@@ -1,8 +1,8 @@
 import os
 from qgis.core import QgsApplication, QgsMapLayer, QgsWkbTypes, Qgis, QgsLayerTreeNode
 from qgis.gui import QgisInterface
-from PyQt5.QtWidgets import QAction, QMenu
-from PyQt5.QtGui import QIcon
+from qgis.PyQt.QtWidgets import QAction, QMenu
+from qgis.PyQt.QtGui import QIcon
 from .scripts.coordinate_algorithm import CoordinateCalculatorAlgorithm
 from .scripts.calculate_line_geometry import CalculateLineGeometryAlgorithm
 from .scripts.calculate_polygon_geometry import CalculatePolygonGeometryAlgorithm
@@ -43,7 +43,10 @@ class ArcGeekCalculator:
 
     def run_basemap_manager(self):
         dialog = BasemapManager(self.iface)
-        dialog.exec_()
+        try:
+            dialog.exec()
+        except AttributeError:
+            dialog.exec_()
 
     def run_screen_capture(self):
         run_screen_capture(self.iface)
@@ -84,7 +87,7 @@ class ArcGeekCalculator:
         self.add_action("Lines to Ordered Points", self.run_algorithm('lines_to_ordered_points'), os.path.join(self.plugin_dir, "icons/lines_to_points.png"))
         self.add_action("Azimuth and Distance from Coordinates and Table", self.run_algorithm('calculate_line'), os.path.join(self.plugin_dir, "icons/calculate_line.png"))
         self.add_action("Export to CSV (Excel compatible)", self.run_algorithm('export_to_csv'), os.path.join(self.plugin_dir, "icons/export_csv.png"))
-        self.add_action("Tree Planting Pattern Generator", self.run_algorithm('tree_planting_pattern'),                os.path.join(self.plugin_dir, "icons/tree_planting.png"))
+        self.add_action("Tree Planting Pattern Generator", self.run_algorithm('tree_planting_pattern'), os.path.join(self.plugin_dir, "icons/tree_planting.png"))
         self.add_separator()
         self.add_action("Stream Network with Order", self.run_algorithm('watershed_stream'), os.path.join(self.plugin_dir, "icons/watershed_network.png"))
         self.add_action("Watershed Basin Delineation", self.run_algorithm('watershed_basin'), os.path.join(self.plugin_dir, "icons/watershed_basin.png"))
@@ -108,23 +111,18 @@ class ArcGeekCalculator:
         self.add_separator()
         self.add_action("Go to XY", self.run_go_to_xy, os.path.join(self.plugin_dir, "icons/gotoXY.png"))
 
-        # QGIS version
         version = Qgis.QGIS_VERSION_INT
 
-        # Disconnect previous connections before reconnecting
         try:
             self.iface.layerTreeView().contextMenuAboutToShow.disconnect(self.add_layer_menu_items)
         except:
             pass
 
-        # For QGIS 3.0 and later versions
         if version >= 30000:
             self.iface.layerTreeView().contextMenuAboutToShow.connect(self.add_layer_menu_items)
-        # For earlier versions of QGIS (if necessary)
         else:
             self.iface.layerTreeView().layerTreeContextMenuAboutToShow.connect(self.add_layer_menu_items)
 
-        # Connect to the map canvas context menu
         self.iface.mapCanvas().contextMenuAboutToShow.connect(self.add_map_menu_items)
 
     def add_action(self, text, callback, icon_path=None):
@@ -160,20 +158,17 @@ class ArcGeekCalculator:
             self.go_to_xy_dialog.close()
             self.go_to_xy_dialog = None
 
-        # Disconnect the layer tree context menu signal
         try:
             self.iface.layerTreeView().contextMenuAboutToShow.disconnect(self.add_layer_menu_items)
         except:
             pass
 
-        # Disconnect the map canvas context menu signal
         try:
             self.iface.mapCanvas().contextMenuAboutToShow.disconnect(self.add_map_menu_items)
         except:
             pass
 
     def add_layer_menu_items(self, menu):
-        # Safely clear previous actions
         for action in self.context_menu_actions[:]:
             try:
                 if action in menu.actions():
@@ -184,12 +179,9 @@ class ArcGeekCalculator:
             except Exception as e:
                 print(f"Error removing action: {str(e)}")
 
-        # Get the current node
         current_node = self.iface.layerTreeView().currentNode()
         
-        # Check if the current node is a layer (not a group)
         if isinstance(current_node, QgsLayerTreeNode) and current_node.nodeType() == QgsLayerTreeNode.NodeLayer:
-            # Use currentLayer() method which is available in both QGIS 3.34 and 3.38
             layer = self.iface.layerTreeView().currentLayer()
             if layer and layer.type() == QgsMapLayer.VectorLayer:
                 geometry_type = layer.geometryType()
@@ -208,14 +200,12 @@ class ArcGeekCalculator:
                     self.add_action_to_menu(menu, action)
 
     def add_action_to_menu(self, menu, action):
-        # Find a suitable position to insert the action
         insert_position = 0
         for i, existing_action in enumerate(menu.actions()):
             if existing_action.isSeparator() or existing_action.menu():
                 insert_position = i
                 break
         
-        # Insert the action at the found position
         menu.insertAction(menu.actions()[insert_position] if insert_position < len(menu.actions()) else None, action)
         self.context_menu_actions.append(action)
 
