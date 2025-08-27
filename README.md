@@ -1,5 +1,5 @@
 # ArcGeek Calculator Plugin
-Version 4.0.1
+Version 4.0.2
 
 ArcGeek Calculator is a comprehensive QGIS plugin that provides various hydrological, geomorphological, spatial analysis, machine learning, and optimization tools. This version introduces new advanced algorithms including Enhanced Image Classification, Least Cost Path Finder, and Tree Planting Pattern Generator, along with existing tools for Global Curve Number calculation, 3D CAD exports, kriging analysis, satellite index calculation, basemap management, and more.
 
@@ -159,5 +159,6 @@ ArcGeek - Franz Pucha-Cofrep
 If you use ArcGeek Calculator in your research or projects, please cite it as follows:
 
 Pucha-Cofrep, Franz. (2024). ArcGeek Calculator (Version 3.x) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
+
 
 For in-text citations, you can use: (Pucha-Cofrep, 2024) for parenthetical citations or Pucha-Cofrep (2024) for narrative citations. The citation format follows the American Psychological Association Style 7th Edition (APA 7).
