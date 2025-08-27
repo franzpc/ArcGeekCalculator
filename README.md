@@ -104,6 +104,8 @@ ArcGeek - Franz Pucha-Cofrep
 
 ## Version History
 
+**4.0.2**: Updated Global Curve Number data source due to ORNL service changes
+
 **4.0.1**: Minor improvements and bug fixes:
 - Qt6, ready for QGIS 4
 - Enhanced Watershed Basin Delineation with triple stream order calculation for concentration time analysis
