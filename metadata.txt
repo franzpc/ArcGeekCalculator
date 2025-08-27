@@ -1,19 +1,19 @@
 [general]
 name=ArcGeek Calculator
 qgisMinimumVersion=3.34
-qgisMaximumVersion=3.99
+qgisMaximumVersion=4.99
 description=ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, 3D CAD integration, topographic profiling, machine learning classification, path optimization, and forestry planning in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, foresters, and anyone working with spatial data.
-version=4.0.1
+version=4.0.2
 author=ArcGeek
 email=soporte@arcgeek.com
 about=Developed by Franz Pucha-Cofrep, 2024-2025. This plugin provides a suite of tools for GIS analysts, cartographers, surveyors, hydrologists, urban planners, foresters, and anyone working with spatial data:
 
-# Key Features - Version 4.0.1
+# Key Features - Version 4.0.2
 
-## NEW in Version 4.0.1:
+## NEW in Version 4.0.2:
     - Full Qt6 Compatibility: Compatible with both Qt5 and Qt6 versions of QGIS
-    - Enhanced compatibility with QGIS 3.34+ and QGIS 4.x preparation
-    - Improved stability across different QGIS versions
+    - Enhanced compatibility with QGIS 4.x
+    - Updated Global Curve Number data source due to ORNL service changes
 
 ## Core Features:
     - Enhanced Image Classification: Advanced machine learning classification with Random Forest, SVM, GMM, and KNN algorithms, including scientific accuracy assessment and comprehensive HTML reports
