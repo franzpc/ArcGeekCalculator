@@ -14,9 +14,6 @@ import csv
 from osgeo import gdal
 
 class GlobalCNCalculator(QgsProcessingAlgorithm):
-    """
-    Calculates the Curve Number using global datasets from ESA WorldCover and ORNL HYSOG.
-    """
     
     INPUT_AREA = 'INPUT_AREA'
     OUTPUT_CN = 'OUTPUT_CN'
@@ -90,12 +87,10 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
         steps = 6
         multi_feedback = QgsProcessingMultiStepFeedback(steps, feedback)
         
-        # Get parameters
         aoi = self.parameterAsVectorLayer(parameters, self.INPUT_AREA, context)
         if not aoi.isValid():
             raise QgsProcessingException(self.tr('Invalid study area'))
 
-        # Transform to EPSG:4326 if needed
         if aoi.crs().authid() != 'EPSG:4326':
             feedback.pushInfo(self.tr('Reprojecting study area to EPSG:4326...'))
             result = processing.run('native:reprojectlayer', {
@@ -105,33 +100,28 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             }, context=context, feedback=feedback)
             aoi = result['OUTPUT']
 
-        # Get VRT file path
         vrt_path = os.path.join(os.path.dirname(__file__), 'data', 'esa_worldcover_2021.vrt')
         if not os.path.exists(vrt_path):
             raise QgsProcessingException(self.tr('ESA WorldCover VRT file not found'))
 
         results = {}
         try:
-            # Process Land Cover
             multi_feedback.setCurrentStep(0)
             feedback.pushInfo(self.tr('Step 1/6: Processing ESA WorldCover data...'))
             landcover = self.process_landcover(aoi, vrt_path, parameters, context, feedback)
             if parameters.get(self.OUTPUT_LANDCOVER, None):
                 results[self.OUTPUT_LANDCOVER] = landcover
 
-            # Process Soil Data
             multi_feedback.setCurrentStep(1)
-            feedback.pushInfo(self.tr('Step 2/6: Processing ORNL HYSOG data...'))
-            soil = self.process_soil_data(aoi, parameters, context, feedback)
+            feedback.pushInfo(self.tr('Step 2/6: Processing ORNL HYSOG data from tiles...'))
+            soil = self.process_soil_data_tiles(aoi, parameters, context, feedback)
             if parameters.get(self.OUTPUT_SOIL, None):
                 results[self.OUTPUT_SOIL] = soil
 
-            # Align rasters
             multi_feedback.setCurrentStep(2)
             feedback.pushInfo(self.tr('Step 3/6: Aligning datasets...'))
             aligned_soil = self.align_rasters(soil, landcover, context, feedback)
 
-            # Calculate initial CN
             multi_feedback.setCurrentStep(3)
             feedback.pushInfo(self.tr('Step 4/6: Calculating initial Curve Number...'))
             temp_cn_raster = self.calculate_cn(landcover, aligned_soil, QgsProcessing.TEMPORARY_OUTPUT, 
@@ -139,11 +129,9 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
                                                parameters.get(self.ARC, 1),
                                                context, feedback)
 
-            # Clip CN raster with input polygon
             multi_feedback.setCurrentStep(4)
             feedback.pushInfo(self.tr('Step 5/6: Clipping final Curve Number to study area...'))
             
-            # Clip the raster
             clipped_cn = processing.run("gdal:cliprasterbymasklayer", {
                 'INPUT': temp_cn_raster,
                 'MASK': aoi,
@@ -157,12 +145,8 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
                 'OUTPUT': parameters[self.OUTPUT_CN]
             }, context=context, feedback=feedback)['OUTPUT']
             
-            # Set the layer name to "Curve Number"
-            output_layer = QgsRasterLayer(clipped_cn, 'Curve Number')
-
             results[self.OUTPUT_CN] = clipped_cn
 
-            # Calculate statistics
             multi_feedback.setCurrentStep(5)
             feedback.pushInfo(self.tr('Step 6/6: Calculating statistics...'))
             self.calculate_statistics(clipped_cn, feedback)
@@ -173,7 +157,6 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             raise QgsProcessingException(str(e))
 
     def process_landcover(self, aoi, vrt_path, parameters, context, feedback):
-        """Process landcover data from VRT"""
         extent = aoi.extent()
         extent_str = f"{extent.xMinimum()},{extent.xMaximum()},{extent.yMinimum()},{extent.yMaximum()} [EPSG:4326]"
         
@@ -188,50 +171,132 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             'OUTPUT': output
         }, context=context, feedback=feedback)['OUTPUT']
 
-    def process_soil_data(self, aoi, parameters, context, feedback):
-        """Download and process ORNL soil data"""
+    def process_soil_data_tiles(self, aoi, parameters, context, feedback):
         extent = aoi.extent()
-        bbox = f"{extent.xMinimum()},{extent.yMinimum()},{extent.xMaximum()},{extent.yMaximum()}"
-        width = int((extent.xMaximum() - extent.xMinimum()) / 0.002083333)
-        height = int(width * (extent.yMaximum() - extent.yMinimum()) / 
-                    (extent.xMaximum() - extent.xMinimum()))
-
-        url = f"https://webmap.ornl.gov/ogcbroker/wcs?SERVICE=WCS&VERSION=1.0.0&REQUEST=GetCoverage&FORMAT=GeoTIFF_BYTE&COVERAGE=1566_1&WIDTH={width}&HEIGHT={height}&BBOX={bbox}&CRS=epsg:4326&RESPONSE_CRS=epsg:4326"
-
+        min_lon, max_lon = extent.xMinimum(), extent.xMaximum()
+        min_lat, max_lat = extent.yMinimum(), extent.yMaximum()
+        
+        base_url = "https://arcgeek.com/hysog_tiles/"
+        tiles_info_url = f"{base_url}tiles_info.csv"
+        
         try:
-            temp_file = os.path.join(tempfile.gettempdir(), f'ornl_soil_{os.getpid()}.tif')
-            response = requests.get(url, stream=True, timeout=30)
+            feedback.pushInfo('Downloading tiles information...')
+            response = requests.get(tiles_info_url, timeout=30)
             response.raise_for_status()
             
-            with open(temp_file, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
+            required_tiles = []
+            lines = response.text.strip().split('\n')
+            header = lines[0].split(',')
             
+            for line in lines[1:]:
+                if not line.strip():
+                    continue
+                    
+                parts = line.split(',')
+                if len(parts) < 6:
+                    continue
+                    
+                tile_min_lon = float(parts[2])
+                tile_max_lon = float(parts[3])
+                tile_min_lat = float(parts[4])
+                tile_max_lat = float(parts[5])
+                filename = parts[1]
+                
+                if not (max_lon < tile_min_lon or min_lon > tile_max_lon or 
+                        max_lat < tile_min_lat or min_lat > tile_max_lat):
+                    required_tiles.append(filename)
+            
+            if not required_tiles:
+                raise QgsProcessingException('No HYSOG tiles found for the study area')
+            
+            feedback.pushInfo(f'Found {len(required_tiles)} required tiles: {", ".join(required_tiles)}')
+            
+            temp_dir = tempfile.mkdtemp()
+            downloaded_tiles = []
+            
+            for i, tile_name in enumerate(required_tiles):
+                feedback.pushInfo(f'Downloading tile {i+1}/{len(required_tiles)}: {tile_name}')
+                tile_url = f"{base_url}{tile_name}"
+                temp_tile_path = os.path.join(temp_dir, tile_name)
+                
+                response = requests.get(tile_url, stream=True, timeout=60)
+                response.raise_for_status()
+                
+                with open(temp_tile_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                
+                downloaded_tiles.append(temp_tile_path)
+            
+            if len(downloaded_tiles) == 1:
+                merged_file = downloaded_tiles[0]
+            else:
+                feedback.pushInfo('Merging multiple tiles...')
+                merged_file = os.path.join(temp_dir, 'merged_hysog.tif')
+                
+                vrt_file = os.path.join(temp_dir, 'tiles.vrt')
+                vrt_ds = gdal.BuildVRT(vrt_file, downloaded_tiles)
+                vrt_ds = None
+                
+                translate_options = gdal.TranslateOptions(
+                    format='GTiff',
+                    creationOptions=['COMPRESS=LZW']
+                )
+                gdal.Translate(merged_file, vrt_file, options=translate_options)
+            
+            feedback.pushInfo('Clipping HYSOG data to study area...')
             output = parameters.get(self.OUTPUT_SOIL, QgsProcessing.TEMPORARY_OUTPUT)
             
-            result = processing.run("gdal:translate", {
-                'INPUT': temp_file,
-                'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:4326'),
+            extent_str = f"{min_lon},{max_lon},{min_lat},{max_lat} [EPSG:4326]"
+            
+            clipped_output = processing.run("gdal:cliprasterbyextent", {
+                'INPUT': merged_file,
+                'PROJWIN': extent_str,
                 'NODATA': None,
-                'COPY_SUBDATASETS': False,
                 'OPTIONS': 'COMPRESS=LZW',
                 'DATA_TYPE': 0,
+                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            }, context=context, feedback=feedback)['OUTPUT']
+            
+            feedback.pushInfo('Processing NoData and invalid soil group values...')
+            
+            filled_temp = processing.run("gdal:fillnodata", {
+                'INPUT': clipped_output,
+                'BAND': 1,
+                'DISTANCE': 10,
+                'ITERATIONS': 0,
+                'NO_MASK': False,
+                'MASK_LAYER': None,
+                'OPTIONS': '',
+                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            }, context=context, feedback=feedback)['OUTPUT']
+            
+            output = parameters.get(self.OUTPUT_SOIL, QgsProcessing.TEMPORARY_OUTPUT)
+            result = processing.run("gdal:rastercalculator", {
+                'INPUT_A': filled_temp,
+                'BAND_A': 1,
+                'FORMULA': 'numpy.where((A == 255) | (A == 13) | (A == 14) | (A > 4), 3, A)',
+                'NO_DATA': None,
+                'RTYPE': 0,
+                'OPTIONS': '',
                 'OUTPUT': output
             }, context=context, feedback=feedback)['OUTPUT']
             
             try:
-                os.remove(temp_file)
+                import shutil
+                shutil.rmtree(temp_dir)
             except:
                 pass
                 
             return result
             
+        except requests.RequestException as e:
+            raise QgsProcessingException(f'Error downloading HYSOG tiles: {str(e)}')
         except Exception as e:
-            raise QgsProcessingException(f'Error downloading soil data: {str(e)}')
+            raise QgsProcessingException(f'Error processing HYSOG data: {str(e)}')
 
     def align_rasters(self, soil_raster, lc_raster, context, feedback):
-        """Align soil raster to land cover resolution and extent"""
         lc = QgsRasterLayer(lc_raster)
         extent = lc.extent()
         pixel_size = lc.rasterUnitsPerPixelX()
@@ -251,7 +316,6 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
         }, context=context, feedback=feedback)['OUTPUT']
 
     def calculate_cn(self, landcover, soil, output_path, hc_index, arc_index, context, feedback):
-        """Calculate CN values"""
         cn_values = self.get_cn_values(hc_index, arc_index)
         
         expressions = []
@@ -270,13 +334,12 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             'BAND_B': 1,
             'FORMULA': formula,
             'NO_DATA': None,
-            'RTYPE': 0,  # Byte data type
+            'RTYPE': 0,
             'OPTIONS': '',
             'OUTPUT': output_path
         }, context=context, feedback=feedback)['OUTPUT']
 
     def get_cn_values(self, hc_index, arc_index):
-        """Return CN lookup table reading from CSV files"""
         csv_filename = f"default_lookup_{(self.hc[hc_index][:1].lower())}_{(self.arc[arc_index].lower())}.csv"
         csv_path = os.path.join(os.path.dirname(__file__), 'data', csv_filename)
     
@@ -286,7 +349,6 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             with open(csv_path, 'r', encoding='utf-8-sig') as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row in reader:
-                    # Skip empty lines
                     if not row['grid_code'].strip():
                         continue
                     
@@ -306,7 +368,6 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             raise QgsProcessingException(f'Error reading CN values from {csv_filename}: {str(e)}')
 
     def calculate_statistics(self, raster_path, feedback):
-        """Calculate and report CN statistics with derived hydrological parameters"""
         try:
             raster = QgsRasterLayer(raster_path)
             if not raster.isValid():
@@ -316,11 +377,10 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             provider = raster.dataProvider()
             stats = provider.bandStatistics(1, QgsRasterBandStats.All)
             
-            # Calculate additional hydrological parameters
             mean_cn = stats.mean
-            S = (25400 / mean_cn) - 254  # Storage potential in mm
-            P = 100  # Example rainfall in mm (can be modified)
-            Q = ((P - 0.2 * S) ** 2) / (P + 0.8 * S) if P > 0.2 * S else 0  # Direct runoff in mm
+            S = (25400 / mean_cn) - 254
+            P = 100
+            Q = ((P - 0.2 * S) ** 2) / (P + 0.8 * S) if P > 0.2 * S else 0
             
             feedback.pushInfo('\n=== Curve Number Statistics ===')
             feedback.pushInfo(f'Mean CN: {mean_cn:.2f}')
@@ -346,7 +406,7 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
         return self.tr("""
         Calculates Curve Number using global datasets:
         - ESA WorldCover 2021 for land cover
-        - ORNL HYSOG for hydrologic soil groups
+        - ORNL HYSOG for hydrologic soil groups (tiled system)
         
         Parameters:
         - Study Area: Polygon of the area to calculate CN for
@@ -363,10 +423,10 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             
         Data Sources:
         - Land Cover: ESA WorldCover 2021 (10m resolution)
-        - Soil Groups: ORNL HYSOG Global Hydrologic Soil Groups
+        - Soil Groups: ORNL HYSOG Global Hydrologic Soil Groups (tiled system)
         
-        Note: Internet connection required to download soil and land cover data.
-        Processing time depends on the size of your study area.
+        Note: Internet connection required to download soil data tiles.
+        Processing time depends on the size of your study area and number of tiles needed.
 
         This tool is based on the "Curve Number Generator" plugin by Abdul Raheem.
         """)
