@@ -1,5 +1,5 @@
 # ArcGeek Calculator Plugin
-Version 4.0.6
+Version 4.0.7
 
 ## Description
 ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, 3D CAD integration, topographic profiling, machine learning classification, path optimization, and forestry planning in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, foresters, and anyone working with spatial data.
@@ -103,7 +103,10 @@ ArcGeek - Franz Pucha-Cofrep
 
 ## Version History
 
-**4.0.6**: 
+**4.0.7**:
+- Minor bug fixes and improvements
+
+**4.0.6**:
 - Added Multiple Basin Delineation tool (contribution by Anthropocene Engineering team - anthroeng.com)
 - Enhanced Watershed Basin Delineation with Longest Flow Path calculation (suggested by Antonio López Espinazo)
 - Improved topological integration of drainage networks
@@ -161,6 +164,6 @@ ArcGeek - Franz Pucha-Cofrep
 
 If you use ArcGeek Calculator in your research or projects, please cite it as follows:
 
-Pucha-Cofrep, Franz. (2024). ArcGeek Calculator (Version 4.0.6) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
+Pucha-Cofrep, Franz. (2024-2026). ArcGeek Calculator (Version 4.0.7) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
 
 For in-text citations, you can use: (Pucha-Cofrep, 2024) for parenthetical citations or Pucha-Cofrep (2024) for narrative citations. The citation format follows the American Psychological Association Style 7th Edition (APA 7).
