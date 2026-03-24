@@ -71,9 +71,7 @@ about=Developed by Franz Pucha-Cofrep, 2024-2026. ArcGeek Calculator provides a 
     27. Export Contours to 3D CAD: Export contour lines to DXF format preserving elevation values.
 
 ## Compatibility:
-    - Supports both Qt5 and Qt6 versions of QGIS
-    - Compatible with QGIS 3.34 through 3.99
-    - Fully tested on QGIS 3.40 (Qt5) and QGIS 3.44 (Qt6)
+    - Compatible with QGIS 3.40 through 4.99
 
 ## External Dependencies:
 Some tools require additional Python packages:
@@ -100,4 +98,3 @@ experimental=False
 deprecated=False
 hasProcessingProvider=yes
 server=False
-supportsQt6=True
