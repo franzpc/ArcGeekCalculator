@@ -11,7 +11,7 @@ about=Developed by Franz Pucha-Cofrep, 2024-2026. ArcGeek Calculator provides a 
 # Key Features - Version 4.0.7
 
 ## NEW in Version 4.0.7:
-    - Fixed Topographic Profile: plotly import scope error in _generate_html method
+    - Minor bug fixes and improvements
 
 ## Changes in Version 4.0.6:
     - Added Multiple Basin Delineation tool (contribution by Anthropocene Engineering team - anthroeng.com)
