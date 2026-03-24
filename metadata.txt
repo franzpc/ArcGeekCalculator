@@ -86,7 +86,7 @@ Some tools require additional Python packages:
 
 If you use ArcGeek Calculator in your research or projects, please cite it as follows:
 
-Pucha-Cofrep, Franz. (2024-2026). ArcGeek Calculator (Version 4.0.7) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
+Pucha-Cofrep, F. (2026). ArcGeek Calculator (Version 4.0.7) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
 
 tracker=https://github.com/franzpc/ArcGeekCalculator/issues
 repository=https://github.com/franzpc/ArcGeekCalculator
