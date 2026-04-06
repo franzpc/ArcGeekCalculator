@@ -1,5 +1,5 @@
 # ArcGeek Calculator Plugin
-Version 4.0.7
+Version 4.0.8
 
 ## Description
 ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, 3D CAD integration, topographic profiling, machine learning classification, path optimization, and forestry planning in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, foresters, and anyone working with spatial data.
@@ -51,6 +51,7 @@ ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools f
 ### Advanced Analysis and Remote Sensing
 22. **Kriging Analysis**: Perform spatial interpolation using Kriging (requires external libraries).
 23. **Satellite Index Calculator**: Calculate various satellite indices (NDVI, NDWI, etc.) for different satellites.
+24. **AI MCP Server**: Seamlessly control QGIS through Claude Desktop using the Model Context Protocol (integration based on QGISMCP by jjsantos01).
 
 ### Data Management and Export
 24. **Basemap Manager**: Add and manage basemaps from Google Maps, Esri, Bing, and others.
@@ -85,6 +86,29 @@ pip install plotly numpy
 pip install pykrige scipy scikit-learn numpy matplotlib seaborn plotly
 ```
 
+## AI MCP Server Configuration
+To use the AI MCP Server with Claude Desktop, you must install `uv`:
+- **Mac/Linux**: `brew install uv`
+- **Windows (Powershell)**: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+
+Once installed, add the following configuration to your `claude_desktop_config.json`, updating `[YOUR_USERNAME]` with your actual Windows username (or the equivalent path on Mac/Linux):
+
+```json
+{
+  "mcpServers": {
+    "qgis": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "C:\\Users\\[YOUR_USERNAME]\\AppData\\Roaming\\QGIS\\QGIS3\\profiles\\default\\python\\plugins\\ArcGeekCalculator\\scripts\\qgis_mcp\\server_mcp",
+        "run",
+        "qgis_mcp_server.py"
+      ]
+    }
+  }
+}
+```
+
 ## Support
 If you encounter any issues or have any suggestions, please open an issue on our [issue tracker](https://github.com/franzpc/ArcGeekCalculator/issues).
 
@@ -102,6 +126,10 @@ This project is licensed under the GNU General Public License v2.0 or later. See
 ArcGeek - Franz Pucha-Cofrep
 
 ## Version History
+
+**4.0.8**:
+- Added AI MCP Server integration for Claude Desktop (based on jjsantos01)
+- Bundled internal Python MCP client for seamless user configuration
 
 **4.0.7**:
 - Minor bug fixes and improvements
@@ -164,6 +192,6 @@ ArcGeek - Franz Pucha-Cofrep
 
 If you use ArcGeek Calculator in your research or projects, please cite it as follows:
 
-Pucha-Cofrep, F. (2026). ArcGeek Calculator (Version 4.0.7) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
+Pucha-Cofrep, F. (2026). ArcGeek Calculator (Version 4.0.8) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
 
 For in-text citations, you can use: (Pucha-Cofrep, 2024) for parenthetical citations or Pucha-Cofrep (2024) for narrative citations. The citation format follows the American Psychological Association Style 7th Edition (APA 7).

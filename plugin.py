@@ -41,6 +41,7 @@ class ArcGeekCalculator:
         self.plugin_dir = os.path.dirname(__file__)
         self.context_menu_actions = []
         self.map_tool = None
+        self.mcp_dialog = None
 
     def run_basemap_manager(self):
         dialog = BasemapManager(self.iface)
@@ -112,6 +113,7 @@ class ArcGeekCalculator:
         self.add_action("Satellite Index Calculator", self.run_algorithm('satellite_index'), os.path.join(self.plugin_dir, "icons/satellite_index.png"))
         self.add_action("Enhanced Image Classification", self.run_algorithm('enhanced_classification'), os.path.join(self.plugin_dir, "icons/classification.png"))
         self.add_separator()
+        self.add_action("MCP Server", self.toggle_mcp_dialog, os.path.join(self.plugin_dir, "icons/screen_capture.png"))
         self.add_action("Go to XY", self.run_go_to_xy, os.path.join(self.plugin_dir, "icons/gotoXY.png"))
 
         version = Qgis.QGIS_VERSION_INT
@@ -154,12 +156,28 @@ class ArcGeekCalculator:
             self.go_to_xy_dialog = GoToXYDialog(self.iface, self.iface.mainWindow())
         self.go_to_xy_dialog.show()
 
+    def toggle_mcp_dialog(self):
+        from .scripts.qgis_mcp.qgis_mcp_plugin import QgisMCPDialog
+        if not self.mcp_dialog:
+            self.mcp_dialog = QgisMCPDialog(self.iface)
+            
+        if self.mcp_dialog.isVisible():
+            self.mcp_dialog.hide()
+        else:
+            self.mcp_dialog.show()
+            self.mcp_dialog.raise_()
+
     def unload(self):
         for action in self.actions:
             self.iface.removePluginMenu(self.menu, action)
         if self.go_to_xy_dialog:
             self.go_to_xy_dialog.close()
             self.go_to_xy_dialog = None
+
+        if self.mcp_dialog:
+            self.mcp_dialog.stop_server()
+            self.mcp_dialog.close()
+            self.mcp_dialog = None
 
         try:
             self.iface.layerTreeView().contextMenuAboutToShow.disconnect(self.add_layer_menu_items)
