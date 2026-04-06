@@ -54,10 +54,10 @@ ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools f
 24. **AI MCP Server**: Seamlessly control QGIS through Claude Desktop using the Model Context Protocol (integration based on QGISMCP by jjsantos01).
 
 ### Data Management and Export
-24. **Basemap Manager**: Add and manage basemaps from Google Maps, Esri, Bing, and others.
-25. **Screen Capture**: Capture and georeference the current map view.
-26. **Export to CSV**: Export vector layer attributes to CSV format compatible with Excel.
-27. **Export Contours to 3D CAD**: Export contour lines to DXF format preserving elevation values, making them compatible with AutoCAD, Civil 3D, BricsCAD, and other CAD software.
+25. **Basemap Manager**: Add and manage basemaps from Google Maps, Esri, Bing, and others.
+26. **Screen Capture**: Capture and georeference the current map view.
+27. **Export to CSV**: Export vector layer attributes to CSV format compatible with Excel.
+28. **Export Contours to 3D CAD**: Export contour lines to DXF format preserving elevation values, making them compatible with AutoCAD, Civil 3D, BricsCAD, and other CAD software.
 
 ## External Libraries
 Some tools in this plugin require external libraries:
