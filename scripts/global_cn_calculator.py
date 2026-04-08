@@ -4,7 +4,8 @@ from qgis.core import (QgsProcessingAlgorithm,
                        QgsProcessingException, QgsRasterLayer,
                        QgsCoordinateReferenceSystem, QgsRasterBandStats,
                        QgsProcessingMultiStepFeedback,
-                       QgsProcessingParameterEnum)
+                       QgsProcessingParameterEnum,
+                       QgsVectorFileWriter, QgsCoordinateTransformContext)
 from qgis.PyQt.QtCore import QCoreApplication
 import processing
 import requests
@@ -132,19 +133,19 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             multi_feedback.setCurrentStep(4)
             feedback.pushInfo(self.tr('Step 5/6: Clipping final Curve Number to study area...'))
             
-            clipped_cn = processing.run("gdal:cliprasterbymasklayer", {
-                'INPUT': temp_cn_raster,
-                'MASK': aoi,
-                'SOURCE_CRS': QgsCoordinateReferenceSystem('EPSG:4326'),
-                'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:4326'),
-                'NODATA': None,
-                'ALPHA_BAND': False,
-                'CROP_TO_CUTLINE': True,
-                'KEEP_RESOLUTION': True,
-                'SET_RESOLUTION': False,
-                'OUTPUT': parameters[self.OUTPUT_CN]
-            }, context=context, feedback=feedback)['OUTPUT']
-            
+            _aoi_mask = os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'aoi.gpkg')
+            try:
+                _opts = QgsVectorFileWriter.SaveVectorOptions()
+                _opts.driverName = 'GPKG'
+                QgsVectorFileWriter.writeAsVectorFormatV3(aoi, _aoi_mask, QgsCoordinateTransformContext(), _opts)
+            except AttributeError:
+                QgsVectorFileWriter.writeAsVectorFormat(aoi, _aoi_mask, 'UTF-8', aoi.crs(), 'GPKG')
+            _cn_in = temp_cn_raster if isinstance(temp_cn_raster, str) else \
+                temp_cn_raster.dataProvider().dataSourceUri().split('|')[0]
+            clipped_cn = parameters[self.OUTPUT_CN]
+            gdal.Warp(clipped_cn, _cn_in,
+                      cutlineDSName=_aoi_mask, cropToCutline=True, format='GTiff')
+
             results[self.OUTPUT_CN] = clipped_cn
 
             multi_feedback.setCurrentStep(5)
@@ -162,14 +163,14 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
         
         output = parameters.get(self.OUTPUT_LANDCOVER, QgsProcessing.TEMPORARY_OUTPUT)
         
-        return processing.run("gdal:cliprasterbyextent", {
-            'INPUT': vrt_path,
-            'PROJWIN': extent_str,
-            'NODATA': None,
-            'OPTIONS': '',
-            'DATA_TYPE': 0,
-            'OUTPUT': output
-        }, context=context, feedback=feedback)['OUTPUT']
+        out_path = output if output != QgsProcessing.TEMPORARY_OUTPUT else \
+            os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'landcover.tif')
+        gdal.UseExceptions()
+        gdal.Translate(out_path, vrt_path,
+                       projWin=[extent.xMinimum(), extent.yMaximum(),
+                                extent.xMaximum(), extent.yMinimum()],
+                       format='GTiff')
+        return out_path
 
     def process_soil_data_tiles(self, aoi, parameters, context, feedback):
         extent = aoi.extent()
@@ -250,38 +251,42 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             
             extent_str = f"{min_lon},{max_lon},{min_lat},{max_lat} [EPSG:4326]"
             
-            clipped_output = processing.run("gdal:cliprasterbyextent", {
-                'INPUT': merged_file,
-                'PROJWIN': extent_str,
-                'NODATA': None,
-                'OPTIONS': 'COMPRESS=LZW',
-                'DATA_TYPE': 0,
-                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-            }, context=context, feedback=feedback)['OUTPUT']
+            _clipped_path = os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'hysog_clipped.tif')
+            gdal.Translate(_clipped_path, merged_file,
+                           projWin=[min_lon, max_lat, max_lon, min_lat],
+                           creationOptions=['COMPRESS=LZW'], format='GTiff')
+            clipped_output = _clipped_path
             
             feedback.pushInfo('Processing NoData and invalid soil group values...')
             
-            filled_temp = processing.run("gdal:fillnodata", {
-                'INPUT': clipped_output,
-                'BAND': 1,
-                'DISTANCE': 10,
-                'ITERATIONS': 0,
-                'NO_MASK': False,
-                'MASK_LAYER': None,
-                'OPTIONS': '',
-                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-            }, context=context, feedback=feedback)['OUTPUT']
+            _fill_output = os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'filled.tif')
+            _src_ds = gdal.Open(clipped_output)
+            _driver = gdal.GetDriverByName('GTiff')
+            _dst_ds = _driver.CreateCopy(_fill_output, _src_ds, options=['COMPRESS=LZW'])
+            _src_ds = None
+            _band = _dst_ds.GetRasterBand(1)
+            gdal.FillNodata(targetBand=_band, maskBand=_band.GetMaskBand(),
+                            maxSearchDist=10, smoothingIterations=0)
+            _dst_ds.FlushCache()
+            _dst_ds = None
+            filled_temp = _fill_output
             
+            import numpy as np
             output = parameters.get(self.OUTPUT_SOIL, QgsProcessing.TEMPORARY_OUTPUT)
-            result = processing.run("gdal:rastercalculator", {
-                'INPUT_A': filled_temp,
-                'BAND_A': 1,
-                'FORMULA': 'numpy.where((A == 255) | (A == 13) | (A == 14) | (A > 4), 3, A)',
-                'NO_DATA': None,
-                'RTYPE': 0,
-                'OPTIONS': '',
-                'OUTPUT': output
-            }, context=context, feedback=feedback)['OUTPUT']
+            _soil_out = output if output != QgsProcessing.TEMPORARY_OUTPUT else \
+                os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'soil.tif')
+            _src2 = gdal.Open(filled_temp)
+            A = _src2.GetRasterBand(1).ReadAsArray().astype(np.float32)
+            _soil_arr = np.where((A == 255) | (A == 13) | (A == 14) | (A > 4), 3, A).astype(np.uint8)
+            _drv2 = gdal.GetDriverByName('GTiff')
+            _dst2 = _drv2.Create(_soil_out, _src2.RasterXSize, _src2.RasterYSize, 1, gdal.GDT_Byte)
+            _dst2.SetGeoTransform(_src2.GetGeoTransform())
+            _dst2.SetProjection(_src2.GetProjection())
+            _dst2.GetRasterBand(1).WriteArray(_soil_arr)
+            _dst2.FlushCache()
+            _dst2 = None
+            _src2 = None
+            result = _soil_out
             
             try:
                 import shutil
@@ -301,19 +306,16 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
         extent = lc.extent()
         pixel_size = lc.rasterUnitsPerPixelX()
         
-        return processing.run("gdal:warpreproject", {
-            'INPUT': soil_raster,
-            'SOURCE_CRS': QgsCoordinateReferenceSystem('EPSG:4326'),
-            'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:4326'),
-            'RESAMPLING': 0,
-            'TARGET_RESOLUTION': pixel_size,
-            'TARGET_EXTENT': f"{extent.xMinimum()},{extent.xMaximum()},{extent.yMinimum()},{extent.yMaximum()} [EPSG:4326]",
-            'TARGET_EXTENT_CRS': QgsCoordinateReferenceSystem('EPSG:4326'),
-            'OPTIONS': '',
-            'DATA_TYPE': 0,
-            'MULTITHREADING': False,
-            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        }, context=context, feedback=feedback)['OUTPUT']
+        gdal.UseExceptions()
+        aligned_output = os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'aligned.tif')
+        gdal.Warp(aligned_output, soil_raster,
+                  srcSRS='EPSG:4326', dstSRS='EPSG:4326',
+                  xRes=pixel_size, yRes=pixel_size,
+                  outputBounds=(extent.xMinimum(), extent.yMinimum(),
+                                extent.xMaximum(), extent.yMaximum()),
+                  resampleAlg=gdal.GRA_NearestNeighbour,
+                  format='GTiff')
+        return aligned_output
 
     def calculate_cn(self, landcover, soil, output_path, hc_index, arc_index, context, feedback):
         cn_values = self.get_cn_values(hc_index, arc_index)
@@ -327,17 +329,28 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
         
         formula = '+'.join(expressions)
         
-        return processing.run("gdal:rastercalculator", {
-            'INPUT_A': landcover,
-            'BAND_A': 1,
-            'INPUT_B': soil,
-            'BAND_B': 1,
-            'FORMULA': formula,
-            'NO_DATA': None,
-            'RTYPE': 0,
-            'OPTIONS': '',
-            'OUTPUT': output_path
-        }, context=context, feedback=feedback)['OUTPUT']
+        import numpy as np
+        _lc_path = landcover if isinstance(landcover, str) else \
+            landcover.dataProvider().dataSourceUri().split('|')[0]
+        _soil_path = soil if isinstance(soil, str) else \
+            soil.dataProvider().dataSourceUri().split('|')[0]
+        _lc_ds = gdal.Open(_lc_path)
+        _soil_ds = gdal.Open(_soil_path)
+        A = _lc_ds.GetRasterBand(1).ReadAsArray().astype(np.float32)
+        B = _soil_ds.GetRasterBand(1).ReadAsArray().astype(np.float32)
+        cn_result = eval(formula).astype(np.float32)
+        _out = output_path if output_path != QgsProcessing.TEMPORARY_OUTPUT else \
+            os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'cn.tif')
+        _drv = gdal.GetDriverByName('GTiff')
+        _ds_out = _drv.Create(_out, _lc_ds.RasterXSize, _lc_ds.RasterYSize, 1, gdal.GDT_Float32)
+        _ds_out.SetGeoTransform(_lc_ds.GetGeoTransform())
+        _ds_out.SetProjection(_lc_ds.GetProjection())
+        _ds_out.GetRasterBand(1).WriteArray(cn_result)
+        _ds_out.FlushCache()
+        _ds_out = None
+        _lc_ds = None
+        _soil_ds = None
+        return _out
 
     def get_cn_values(self, hc_index, arc_index):
         csv_filename = f"default_lookup_{(self.hc[hc_index][:1].lower())}_{(self.arc[arc_index].lower())}.csv"

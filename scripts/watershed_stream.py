@@ -127,20 +127,22 @@ class WatershedAnalysisAlgorithm(QgsProcessingAlgorithm):
 
     def resample_dem(self, dem, new_cell_size, context, feedback):
         try:
-            extent = dem.extent()
-            width = int(extent.width() / new_cell_size)
-            height = int(extent.height() / new_cell_size)
-            
-            resampled = processing.run("gdal:warpreproject", {
-                'INPUT': dem,
-                'SOURCE_CRS': dem.crs(),
-                'TARGET_CRS': dem.crs(),
-                'RESAMPLING': 0,  # Nearest neighbor
-                'TARGET_RESOLUTION': new_cell_size,
-                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-            }, context=context, feedback=feedback)['OUTPUT']
-            
-            return QgsRasterLayer(resampled, 'resampled_dem', 'gdal')
+            from osgeo import gdal
+            gdal.UseExceptions()
+
+            input_path = dem.dataProvider().dataSourceUri().split('|')[0]
+            output_path = os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'resampled.tif')
+
+            gdal.Warp(
+                output_path,
+                input_path,
+                xRes=new_cell_size,
+                yRes=new_cell_size,
+                resampleAlg=gdal.GRA_NearestNeighbour,
+                format='GTiff'
+            )
+
+            return QgsRasterLayer(output_path, 'resampled_dem', 'gdal')
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in resample_dem: {str(e)}", level=Qgis.Critical)
             raise

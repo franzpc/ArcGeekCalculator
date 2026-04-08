@@ -88,11 +88,13 @@ pip install pykrige scipy scikit-learn numpy matplotlib seaborn plotly
 
 ## AI MCP Server Configuration
 To use the AI MCP Server with Claude Desktop, you must install `uv`:
-- **Mac/Linux**: `brew install uv`
-- **Windows (Powershell)**: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+- **Windows (PowerShell)**: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+- **Mac**: `brew install uv`
+- **Linux**: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 
-Once installed, add the following configuration to your `claude_desktop_config.json`, updating `[YOUR_USERNAME]` with your actual Windows username (or the equivalent path on Mac/Linux):
+Once installed, add the following configuration to your `claude_desktop_config.json`, replacing the path with the actual location of the plugin on your system:
 
+**Windows** (`C:\Users\[YOUR_USERNAME]\AppData\Roaming\Claude\claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
@@ -101,6 +103,40 @@ Once installed, add the following configuration to your `claude_desktop_config.j
       "args": [
         "--directory",
         "C:\\Users\\[YOUR_USERNAME]\\AppData\\Roaming\\QGIS\\QGIS3\\profiles\\default\\python\\plugins\\ArcGeekCalculator\\scripts\\qgis_mcp\\server_mcp",
+        "run",
+        "qgis_mcp_server.py"
+      ]
+    }
+  }
+}
+```
+
+**Mac** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "qgis": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/[YOUR_USERNAME]/Library/Application Support/QGIS/QGIS3/profiles/default/python/plugins/ArcGeekCalculator/scripts/qgis_mcp/server_mcp",
+        "run",
+        "qgis_mcp_server.py"
+      ]
+    }
+  }
+}
+```
+
+**Linux** (`~/.config/Claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "qgis": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/home/[YOUR_USERNAME]/.local/share/QGIS/QGIS3/profiles/default/python/plugins/ArcGeekCalculator/scripts/qgis_mcp/server_mcp",
         "run",
         "qgis_mcp_server.py"
       ]

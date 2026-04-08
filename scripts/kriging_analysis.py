@@ -588,28 +588,26 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
             # Convert ASCII to target format
             feedback.pushInfo(self.tr('Converting to output raster format...'))
             
-            # Use gdal:translate to ensure proper output format
+            # Convert ASCII to target format using GDAL Python bindings
             try:
-                gdal_params = {
-                    'INPUT': temp_output_asc,
-                    'TARGET_CRS': crs,
-                    'NODATA': -9999,
-                    'COPY_SUBDATASETS': False,
-                    'OPTIONS': 'COMPRESS=LZW',
-                    'DATA_TYPE': 6,  # Float32
-                    'OUTPUT': output_raster
-                }
-                processing.run("gdal:translate", gdal_params, context=context, feedback=feedback)
+                from osgeo import gdal as _gdal
+                _gdal.UseExceptions()
+                _translate_opts = _gdal.TranslateOptions(
+                    format='GTiff',
+                    outputSRS=crs.toWkt(),
+                    noData=-9999,
+                    creationOptions=['COMPRESS=LZW'],
+                    outputType=_gdal.GDT_Float32
+                )
+                _gdal.Translate(output_raster, temp_output_asc, options=_translate_opts)
                 feedback.pushInfo(f"Main raster output saved to: {output_raster}")
             except Exception as e:
                 feedback.reportError(f"Error converting main raster: {str(e)}")
-                # If conversion fails, just copy the ASC file to the output path
+                # Fallback: copy ASC file preserving .prj
                 if not output_raster.lower().endswith('.asc'):
                     output_raster = os.path.splitext(output_raster)[0] + '.asc'
-                # Copy the ASCII file to the output path
                 with open(temp_output_asc, 'r') as src_file, open(output_raster, 'w') as dst_file:
                     dst_file.write(src_file.read())
-                # Also copy the PRJ file if it exists
                 prj_file = os.path.splitext(temp_output_asc)[0] + '.prj'
                 if os.path.exists(prj_file):
                     out_prj = os.path.splitext(output_raster)[0] + '.prj'
@@ -623,23 +621,21 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
                 
                 # Convert error ASCII to target format
                 try:
-                    error_gdal_params = {
-                        'INPUT': temp_error_asc,
-                        'TARGET_CRS': crs,
-                        'NODATA': -9999,
-                        'COPY_SUBDATASETS': False,
-                        'OPTIONS': 'COMPRESS=LZW',
-                        'DATA_TYPE': 6,  # Float32
-                        'OUTPUT': output_error
-                    }
-                    processing.run("gdal:translate", error_gdal_params, context=context, feedback=feedback)
+                    from osgeo import gdal as _gdal
+                    _gdal.UseExceptions()
+                    _err_opts = _gdal.TranslateOptions(
+                        format='GTiff',
+                        outputSRS=crs.toWkt(),
+                        noData=-9999,
+                        creationOptions=['COMPRESS=LZW'],
+                        outputType=_gdal.GDT_Float32
+                    )
+                    _gdal.Translate(output_error, temp_error_asc, options=_err_opts)
                     feedback.pushInfo(f"Error raster output saved to: {output_error}")
                 except Exception as e:
                     feedback.reportError(f"Error converting variance raster: {str(e)}")
-                    # If conversion fails, just copy the ASC file to the output path
                     if not output_error.lower().endswith('.asc'):
                         output_error = os.path.splitext(output_error)[0] + '.asc'
-                    # Copy the ASCII file to the output path
                     with open(temp_error_asc, 'r') as src_file, open(output_error, 'w') as dst_file:
                         dst_file.write(src_file.read())
             

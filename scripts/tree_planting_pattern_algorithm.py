@@ -7,9 +7,12 @@ from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterVectorLayer
                        QgsField, QgsFields, QgsProcessingUtils, QgsProcessingException,
                        QgsProcessing, QgsProcessingParameterRasterLayer,
                        QgsProcessingParameterBoolean, QgsRasterLayer,
-                       QgsCoordinateTransform, QgsProject, QgsRasterBandStats, QgsRaster)
+                       QgsCoordinateTransform, QgsProject, QgsRasterBandStats, QgsRaster,
+                       QgsVectorFileWriter, QgsCoordinateTransformContext)
 import math
 import re
+import os
+import tempfile
 import processing
 
 class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
@@ -386,22 +389,21 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
             temp_feature.setGeometry(polygon_geom)
             temp_provider.addFeatures([temp_feature])
             
-            clip_params = {
-                'INPUT': dem_layer,
-                'MASK': temp_layer,
-                'SOURCE_CRS': dem_layer.crs(),
-                'TARGET_CRS': dem_layer.crs(),
-                'NODATA': -9999,
-                'ALPHA_BAND': False,
-                'CROP_TO_CUTLINE': True,
-                'KEEP_RESOLUTION': True,
-                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-            }
-            
-            result = processing.run("gdal:cliprasterbymasklayer", clip_params, 
-                                   context=context, feedback=feedback, is_child_algorithm=True)
-            
-            clipped_layer = QgsRasterLayer(result['OUTPUT'], 'Clipped DEM')
+            from osgeo import gdal
+            gdal.UseExceptions()
+            _dem_path = dem_layer.dataProvider().dataSourceUri().split('|')[0]
+            _mask_path = os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'clip_mask.gpkg')
+            try:
+                _opts = QgsVectorFileWriter.SaveVectorOptions()
+                _opts.driverName = 'GPKG'
+                QgsVectorFileWriter.writeAsVectorFormatV3(temp_layer, _mask_path, QgsCoordinateTransformContext(), _opts)
+            except AttributeError:
+                QgsVectorFileWriter.writeAsVectorFormat(temp_layer, _mask_path, 'UTF-8', temp_layer.crs(), 'GPKG')
+            _out_path = os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'clipped.tif')
+            gdal.Warp(_out_path, _dem_path,
+                      cutlineDSName=_mask_path, cropToCutline=True,
+                      dstNodata=-9999, format='GTiff')
+            clipped_layer = QgsRasterLayer(_out_path, 'Clipped DEM')
             if not clipped_layer.isValid():
                 feedback.pushWarning("DEM clipping resulted in an invalid layer.")
                 return None

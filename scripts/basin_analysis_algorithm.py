@@ -5,10 +5,12 @@ from qgis.core import (QgsProcessing, QgsFeatureSink, QgsProcessingAlgorithm,
                        QgsVectorLayer, QgsRasterLayer, QgsFeature, QgsGeometry, QgsField,
                        QgsWkbTypes, QgsRasterBandStats, QgsPoint, QgsPointXY,
                        QgsFields, QgsProcessingParameterNumber, QgsProcessingUtils,
-                       QgsProcessingParameterFileDestination, QgsProcessingParameterEnum)
+                       QgsProcessingParameterFileDestination, QgsProcessingParameterEnum,
+                       QgsVectorFileWriter, QgsCoordinateTransformContext)
 import processing
 import math
 import os
+import tempfile
 import webbrowser
 from .basin_processes import calculate_parameters, get_basin_area_interpretation, get_mean_slope_interpretation
 from .hypsometric_curve import generate_hypsometric_curve
@@ -135,18 +137,20 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
             return {}
 
     def clip_dem_by_basin(self, dem_layer, basin_layer, context, feedback):
-        params = {
-            'ALPHA_BAND': False,
-            'CROP_TO_CUTLINE': True,
-            'KEEP_RESOLUTION': False,
-            'INPUT': dem_layer,
-            'MASK': basin_layer,
-            'NODATA': None,
-            'OPTIONS': '',
-            'OUTPUT': 'TEMPORARY_OUTPUT'
-        }
-        result = processing.run("gdal:cliprasterbymasklayer", params, context=context, feedback=feedback)
-        return QgsRasterLayer(result['OUTPUT'], 'Clipped DEM')
+        from osgeo import gdal
+        gdal.UseExceptions()
+        _dem_path = dem_layer.dataProvider().dataSourceUri().split('|')[0]
+        _mask_path = os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'basin.gpkg')
+        try:
+            _opts = QgsVectorFileWriter.SaveVectorOptions()
+            _opts.driverName = 'GPKG'
+            QgsVectorFileWriter.writeAsVectorFormatV3(basin_layer, _mask_path, QgsCoordinateTransformContext(), _opts)
+        except AttributeError:
+            QgsVectorFileWriter.writeAsVectorFormat(basin_layer, _mask_path, 'UTF-8', basin_layer.crs(), 'GPKG')
+        _out_path = os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'clipped.tif')
+        gdal.Warp(_out_path, _dem_path,
+                  cutlineDSName=_mask_path, cropToCutline=True, format='GTiff')
+        return QgsRasterLayer(_out_path, 'Clipped DEM')
 
     def calculate_pour_point(self, streams_layer, stream_order_field):
         max_order = max([f[stream_order_field] for f in streams_layer.getFeatures()])
@@ -164,13 +168,13 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
         return pour_point, upstream_point, downstream_point
 
     def calculate_slope(self, dem_layer, context, feedback):
-        params = {
-            'INPUT': dem_layer,
-            'OUTPUT': 'TEMPORARY_OUTPUT',
-            'Z_FACTOR': 1
-        }
-        result = processing.run("gdal:slope", params, context=context, feedback=feedback)
-        return QgsRasterLayer(result['OUTPUT'], 'Slope')
+        from osgeo import gdal
+        gdal.UseExceptions()
+        input_path = dem_layer.dataProvider().dataSourceUri().split('|')[0]
+        output_path = os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'slope.tif')
+        gdal.DEMProcessing(output_path, input_path, 'slope',
+                           slopeFormat='degree', zFactor=1, format='GTiff')
+        return QgsRasterLayer(output_path, 'Slope')
 
     def get_slope_statistics(self, slope_layer, context, feedback):
         params = {

@@ -1,4 +1,5 @@
 import os
+import tempfile
 import processing
 from qgis.PyQt.QtCore import QCoreApplication, QVariant
 from qgis.core import (QgsProcessing, QgsProcessingAlgorithm, QgsProcessingParameterRasterLayer,
@@ -420,16 +421,14 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
     def resample_dem(self, dem, new_cell_size, context, feedback):
         """Resample DEM to new cell size"""
         try:
-            resampled = processing.run("gdal:warpreproject", {
-                'INPUT': dem,
-                'SOURCE_CRS': dem.crs(),
-                'TARGET_CRS': dem.crs(),
-                'RESAMPLING': 0,  # Nearest neighbor
-                'TARGET_RESOLUTION': new_cell_size,
-                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-            }, context=context, feedback=feedback)['OUTPUT']
-            
-            return QgsRasterLayer(resampled, 'resampled_dem', 'gdal')
+            from osgeo import gdal
+            gdal.UseExceptions()
+            input_path = dem.dataProvider().dataSourceUri().split('|')[0]
+            output_path = os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'resampled.tif')
+            gdal.Warp(output_path, input_path,
+                      xRes=new_cell_size, yRes=new_cell_size,
+                      resampleAlg=gdal.GRA_NearestNeighbour, format='GTiff')
+            return QgsRasterLayer(output_path, 'resampled_dem', 'gdal')
         except Exception as e:
             feedback.reportError(f"Error resampling DEM: {str(e)}")
             raise

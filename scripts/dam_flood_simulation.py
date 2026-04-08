@@ -5,6 +5,8 @@ from qgis.core import (QgsProcessing, QgsProcessingAlgorithm, QgsProcessingParam
                        QgsRasterFileWriter, Qgis, QgsRectangle, QgsProcessingParameterExtent,
                        QgsRasterBandStats)
 import processing
+import os
+import tempfile
 
 class DamFloodSimulationAlgorithm(QgsProcessingAlgorithm):
     INPUT_DEM = 'INPUT_DEM'
@@ -30,13 +32,16 @@ class DamFloodSimulationAlgorithm(QgsProcessingAlgorithm):
         # Determine which DEM to use
         if study_area and not study_area.isNull():
             feedback.pushInfo('Clipping DEM to specified study area...')
-            clipped_dem = processing.run("gdal:cliprasterbyextent", {
-                'INPUT': original_dem,
-                'PROJWIN': study_area,
-                'NODATA': original_dem.dataProvider().sourceNoDataValue(1),
-                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-            }, context=context, feedback=feedback)['OUTPUT']
-            dem_layer = QgsRasterLayer(clipped_dem, 'Clipped DEM')
+            from osgeo import gdal
+            gdal.UseExceptions()
+            _dem_path = original_dem.dataProvider().dataSourceUri().split('|')[0]
+            _clip_path = os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'clipped.tif')
+            _nodata = original_dem.dataProvider().sourceNoDataValue(1)
+            gdal.Translate(_clip_path, _dem_path,
+                           projWin=[study_area.xMinimum(), study_area.yMaximum(),
+                                    study_area.xMaximum(), study_area.yMinimum()],
+                           noData=_nodata, format='GTiff')
+            dem_layer = QgsRasterLayer(_clip_path, 'Clipped DEM')
             if not dem_layer.isValid():
                 raise QgsProcessingException('Failed to clip DEM')
         else:
