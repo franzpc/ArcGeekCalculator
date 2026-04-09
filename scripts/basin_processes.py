@@ -39,15 +39,11 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
     main_channel_length = sum([f.geometry().length() for f in streams_source.getFeatures() if f[stream_order_field] == max([f[stream_order_field] for f in streams_source.getFeatures()])]) / 1e3
 
     stream_order = calculate_stream_order(streams_source, stream_order_field)
-    num_streams_first_order = stream_order.count(1)
     total_stream_number = len(stream_order)
 
     drainage_density = total_stream_length / basin_area if basin_area > 0 else 0
 
-    if num_streams_first_order != 0:
-        bifurcation_ratio = total_stream_number / num_streams_first_order
-    else:
-        bifurcation_ratio = None
+    bifurcation_ratio = calculate_bifurcation_ratio(streams_source, stream_order_field)
 
     try:
         dem_stats = dem_layer.dataProvider().bandStatistics(1, QgsRasterBandStats.All)
@@ -125,7 +121,7 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
 
 
     channel_compensated_slope_results = calculate_channel_compensated_slope(main_channel, dem_layer)
-
+    taylor_schwartz_slope = calculate_taylor_schwartz_slope(main_channel, dem_layer)
 
     # Time of concentration calculations
 
@@ -135,7 +131,7 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
     time_of_concentration_kirpich = (0.0195 * ((main_channel_length * 1000) ** 0.77) / (slope_s ** 0.385)) / 60 if slope_s and slope_s > 0 else None
     # time_of_concentration_kerby = (0.828 * (basin_length * 1000) ** 0.467 / (slope_s ** 0.235)) / 60 if slope_s and slope_s > 0 else None
     time_of_concentration_giandotti = ((4 * math.sqrt(basin_area) + 1.5 * main_channel_length) / (0.8 * math.sqrt(relief))) if relief > 0 else None
-    time_of_concentration_temez = 0.3 * (main_channel_length * (slope_s ** 0.25)) ** 0.76 if slope_s and slope_s > 0 else None
+    time_of_concentration_temez = 0.3 * (main_channel_length / (slope_s ** 0.25)) ** 0.76 if slope_s and slope_s > 0 else None
     time_of_concentration_usda = (3.3 * basin_length) / math.sqrt(mean_slope_percent) if mean_slope_percent > 0 else None
     time_of_concentration_ventura_heras = middle_distance * (basin_area ** 0.5 / slope_percent) if slope_percent and slope_percent > 0 else None
     time_of_concentration_passini = middle_distance * ((basin_area * main_channel_length) ** (1/3)) / (slope_percent ** 0.5) if slope_percent and slope_percent > 0 else None
@@ -154,51 +150,85 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
     infiltration_number = drainage_density * stream_frequency
     drainage_texture = total_stream_number / perimeter
     fitness_ratio = main_channel_length / perimeter
-    asymmetry_factor = calculate_asymmetry_factor(basin_source, QgsPointXY(pour_point))
-    orographic_coefficient = calculate_orographic_coefficient(relief, basin_area)
+    asymmetry_factor = calculate_asymmetry_factor(basin_source, streams_source, stream_order_field, QgsPointXY(pour_point))
+    orographic_coefficient = calculate_orographic_coefficient(mean_elevation, basin_area)
 
-    # New parameters
-    relief_ratio = relief / basin_length
-    hortons_form_factor = basin_area / (basin_length ** 2)
-    schumms_elongation_ratio = (2 * math.sqrt(basin_area / math.pi)) / basin_length
-    main_channel_gradient = relief / main_channel_length
-    main_channel_sinuosity = main_channel_length / basin_length
+    # Channel gradient: elevation drop between channel endpoints / channel length (m/km)
+    main_channel_gradient = (start_elevation - end_elevation) / main_channel_length \
+        if start_elevation is not None and end_elevation is not None else None
+
+    # Sinuosity: curvilinear length / straight-line distance between channel endpoints
+    if start_elevation is not None and end_elevation is not None:
+        _straight_km = QgsGeometry.fromPointXY(QgsPointXY(start_point)).distance(
+            QgsGeometry.fromPointXY(QgsPointXY(end_point))) / 1000
+        main_channel_sinuosity = main_channel_length / _straight_km if _straight_km > 0 else None
+    else:
+        main_channel_sinuosity = None
+
     massivity_index = mean_elevation / basin_area
-    texture_ratio = total_stream_number / perimeter
-    junction_density = total_stream_number / basin_area
-    storage_coefficient = 0.3025 * (basin_length ** 2) / relief  # This is a simplified formula, might need adjustment
+    # Junction count in a tree network ≈ total segments − 1
+    junction_density = (total_stream_number - 1) / basin_area if total_stream_number > 1 else 0
+    storage_coefficient = 0.3025 * (basin_length ** 2) / relief  # simplified formula
 
     return {
+        # --- Basin Geometry ---
         "Basin Area (A)": {"value": basin_area, "unit": "km²", "interpretation": get_basin_area_interpretation(basin_area)},
         "Perimeter (P)": {"value": perimeter, "unit": "km", "interpretation": "Basin perimeter"},
         "Basin Length (Lb)": {"value": basin_length, "unit": "km", "interpretation": "Basin length"},
         "Basin Width (B)": {"value": basin_width, "unit": "km", "interpretation": "Basin width"},
-        "Relief (H)": {"value": relief, "unit": "m", "interpretation": get_relief_interpretation(relief)},
-        "Mean Elevation": {"value": mean_elevation, "unit": "m a.s.l.", "interpretation": "Average elevation of the basin"},
-        "Minimum Elevation": {"value": min_elevation, "unit": "m a.s.l.", "interpretation": "Minimum elevation of the basin"},
+
+        # --- Elevation and Relief ---
         "Maximum Elevation": {"value": max_elevation, "unit": "m a.s.l.", "interpretation": "Maximum elevation of the basin"},
-        "Start Elevation (Main Channel)": {"value": start_elevation, "unit": "m a.s.l.", "interpretation": "Elevation at the start of the main channel"},
-        "End Elevation (Main Channel)": {"value": end_elevation, "unit": "m a.s.l.", "interpretation": "Elevation at the end of the main channel"},
-        "Mean slope of the Basin (degrees)": {"value": mean_slope_degrees, "unit": "degrees", "interpretation": get_mean_slope_interpretation(mean_slope_degrees)},
-        "Mean slope of the Basin (percent)": {"value": mean_slope_m_per_m * 100, "unit": "%", "interpretation": get_mean_slope_interpretation(mean_slope_m_per_m * 100, percent=True)},
-        "Main Channel Slope (Endpoints)": {"value": slope_percent, "unit": "%", "interpretation": get_main_channel_slope_interpretation(slope_percent)},
+        "Minimum Elevation": {"value": min_elevation, "unit": "m a.s.l.", "interpretation": "Minimum elevation of the basin"},
+        "Mean Elevation": {"value": mean_elevation, "unit": "m a.s.l.", "interpretation": "Average elevation of the basin"},
+        "Relief (H)": {"value": relief, "unit": "m", "interpretation": get_relief_interpretation(relief)},
 
+        # --- Basin Slopes ---
+        "Mean Slope of the Basin (degrees)": {"value": mean_slope_degrees, "unit": "degrees", "interpretation": get_mean_slope_interpretation(mean_slope_degrees)},
+        "Mean Slope of the Basin (percent)": {"value": mean_slope_m_per_m * 100, "unit": "%", "interpretation": get_mean_slope_interpretation(mean_slope_m_per_m * 100, percent=True)},
 
-        "Compensated Channel Slope": channel_compensated_slope_results.get("Compensated Channel Slope", {"value": None, "unit": "m/m", "interpretation": "Unable to calculate"}),
-        "Compensated Channel Slope (%)": channel_compensated_slope_results.get("Compensated Channel Slope (%)", {"value": None, "unit": "%", "interpretation": "Unable to calculate"}),
+        # --- Main Channel ---
+        "Main Channel Length (Lc)": {"value": main_channel_length, "unit": "km", "interpretation": "Length of the main channel"},
+        "Start Elevation (Main Channel)": {"value": start_elevation, "unit": "m a.s.l.", "interpretation": "Elevation at the upstream end of the main channel"},
+        "End Elevation (Main Channel)": {"value": end_elevation, "unit": "m a.s.l.", "interpretation": "Elevation at the downstream end of the main channel"},
+        "Main Channel Gradient": {"value": main_channel_gradient, "unit": "m/km", "interpretation": get_main_channel_gradient_interpretation(main_channel_gradient)},
+        "Main Channel Sinuosity": {"value": main_channel_sinuosity, "unit": "", "interpretation": get_main_channel_sinuosity_interpretation(main_channel_sinuosity)},
+        "Main Channel Slope - Endpoints (S)": {"value": slope_percent, "unit": "%", "interpretation": get_main_channel_slope_interpretation(slope_percent)},
+        "Compensated Channel Slope (Linear Regression)": channel_compensated_slope_results.get("Compensated Channel Slope", {"value": None, "unit": "m/m", "interpretation": "Unable to calculate"}),
+        "Compensated Channel Slope - LR (%)": channel_compensated_slope_results.get("Compensated Channel Slope (%)", {"value": None, "unit": "%", "interpretation": "Unable to calculate"}),
+        "Compensated Channel Slope (Taylor-Schwartz)": {"value": taylor_schwartz_slope, "unit": "m/m", "interpretation": get_compensated_channel_slope_interpretation(taylor_schwartz_slope * 100 if taylor_schwartz_slope is not None else None)},
+        "Compensated Channel Slope - TS (%)": {"value": taylor_schwartz_slope * 100 if taylor_schwartz_slope is not None else None, "unit": "%", "interpretation": get_compensated_channel_slope_interpretation(taylor_schwartz_slope * 100 if taylor_schwartz_slope is not None else None)},
 
+        # --- Drainage Network ---
+        "Total Length of Channels (Lt)": {"value": total_stream_length, "unit": "km", "interpretation": "Total length of all channels"},
         "Drainage Density (Dd)": {"value": drainage_density, "unit": "km/km²", "interpretation": get_drainage_density_interpretation(drainage_density)},
         "Stream Frequency (Fs)": {"value": stream_frequency, "unit": "streams/km²", "interpretation": get_stream_frequency_interpretation(stream_frequency)},
-        "Elongation Ratio (Re)": {"value": elongation_ratio, "unit": "", "interpretation": get_elongation_ratio_interpretation(elongation_ratio)},
-        "Circularity Ratio (Rc)": {"value": circularity_ratio, "unit": "", "interpretation": get_circularity_ratio_interpretation(circularity_ratio)},
-        "Compactness Coefficient of Gravelius (Kc)": {"value": compactness_coefficient, "unit": "", "interpretation": get_compactness_coefficient_interpretation(compactness_coefficient)},
-        "Form Factor (Ff)": {"value": form_factor, "unit": "", "interpretation": get_form_factor_interpretation(form_factor)},
-        "Horton's Form Factor": {"value": hortons_form_factor, "unit": "", "interpretation": get_hortons_form_factor_interpretation(hortons_form_factor)},
-        "Schumm's Elongation Ratio": {"value": schumms_elongation_ratio, "unit": "", "interpretation": get_schumms_elongation_ratio_interpretation(schumms_elongation_ratio)},
+        "Drainage Texture (Dt)": {"value": drainage_texture, "unit": "", "interpretation": get_drainage_texture_interpretation(drainage_texture)},
+        "Drainage Intensity (Id)": {"value": drainage_intensity, "unit": "", "interpretation": get_drainage_intensity_interpretation(drainage_intensity)},
         "Length of Overland Flow (Lo)": {"value": length_of_overland_flow, "unit": "km", "interpretation": get_length_of_overland_flow_interpretation(length_of_overland_flow)},
         "Constant of Channel Maintenance (C)": {"value": 1/drainage_density if drainage_density != 0 else None, "unit": "km²/km", "interpretation": get_constant_channel_maintenance_interpretation(1/drainage_density if drainage_density != 0 else None)},
-        "Ruggedness Number (Rn)": {"value": ruggedness_number, "unit": "", "interpretation": get_ruggedness_number_interpretation(ruggedness_number)},
+        "Infiltration Number (If)": {"value": infiltration_number, "unit": "", "interpretation": get_infiltration_number_interpretation(infiltration_number)},
+        "Stream Order (Strahler)": {"value": max(stream_order), "unit": "", "interpretation": f"Highest stream order (Strahler): {max(stream_order)}"},
+        "Number of Streams (Nu)": {"value": total_stream_number, "unit": "", "interpretation": "Total number of stream segments"},
+        "Mean Stream Length (Lm)": {"value": mean_stream_length, "unit": "km", "interpretation": "Average length of streams"},
+        "Bifurcation Ratio (Rb)": {"value": bifurcation_ratio, "unit": "", "interpretation": get_bifurcation_ratio_interpretation(bifurcation_ratio)},
+        "Junction Density": {"value": junction_density, "unit": "junctions/km²", "interpretation": get_junction_density_interpretation(junction_density)},
 
+        # --- Basin Shape ---
+        "Form Factor (Ff) - Horton (1932)": {"value": form_factor, "unit": "", "interpretation": get_form_factor_interpretation(form_factor)},
+        "Elongation Ratio (Re) - Schumm (1956)": {"value": elongation_ratio, "unit": "", "interpretation": get_elongation_ratio_interpretation(elongation_ratio)},
+        "Circularity Ratio (Rc)": {"value": circularity_ratio, "unit": "", "interpretation": get_circularity_ratio_interpretation(circularity_ratio)},
+        "Compactness Coefficient of Gravelius (Kc)": {"value": compactness_coefficient, "unit": "", "interpretation": get_compactness_coefficient_interpretation(compactness_coefficient)},
+        "Asymmetry Factor (Af)": {"value": asymmetry_factor, "unit": "", "interpretation": get_asymmetry_factor_interpretation(asymmetry_factor)},
+        "Fitness Ratio (Rf)": {"value": fitness_ratio, "unit": "", "interpretation": get_fitness_ratio_interpretation(fitness_ratio)},
+
+        # --- Relief and Orographic Indices ---
+        "Ruggedness Number (Rn)": {"value": ruggedness_number, "unit": "", "interpretation": get_ruggedness_number_interpretation(ruggedness_number)},
+        "Orographic Coefficient (Oc)": {"value": orographic_coefficient, "unit": "", "interpretation": get_orographic_coefficient_interpretation(orographic_coefficient)},
+        "Massivity Index": {"value": massivity_index, "unit": "m/km²", "interpretation": get_massivity_index_interpretation(massivity_index)},
+        "Storage Coefficient": {"value": storage_coefficient, "unit": "km", "interpretation": get_storage_coefficient_interpretation(storage_coefficient)},
+
+        # --- Time of Concentration ---
         "Time of Concentration - Kirpich (Tc)": {"value": time_of_concentration_kirpich, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_kirpich)},
         "Time of Concentration - Kerby (Tc)": {"value": time_of_concentration_kerby, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_kerby)},
         "Time of Concentration - Giandotti (Tc)": {"value": time_of_concentration_giandotti, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_giandotti)},
@@ -206,33 +236,9 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
         "Time of Concentration - USDA (Tc)": {"value": time_of_concentration_usda, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_usda)},
         "Time of Concentration - Passini (Tc)": {"value": time_of_concentration_passini, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_passini)},
         "Time of Concentration - Ventura-Heras (Tc)": {"value": time_of_concentration_ventura_heras, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_ventura_heras)},
-
-         "Time of Concentration - Kirpich (Tc)": {"value": time_of_concentration_kirpich, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_kirpich)},
-        "Time of Concentration - Témez (Tc)": {"value": time_of_concentration_temez, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_temez)},
-        "Time of Concentration - Giandotti (Tc)": {"value": time_of_concentration_giandotti, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_giandotti)},
-        # "Time of Concentration - California Culverts Practice (Tc)": {"value": time_of_concentration_california_culverts, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_california_culverts)},
         "Time of Concentration - Bransby-Williams (Tc)": {"value": time_of_concentration_bransby_williams, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_bransby_williams)},
         "Time of Concentration - Johnstone-Cross (Tc)": {"value": time_of_concentration_johnstone_cross, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_johnstone_cross)},
         "Time of Concentration - Clark (Tc)": {"value": time_of_concentration_clark, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_clark)},
-        "Time of Concentration - Kerby (Tc)": {"value": time_of_concentration_kerby, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_kerby)},
-
-        "Bifurcation Ratio (Rb)": {"value": bifurcation_ratio, "unit": "", "interpretation": get_bifurcation_ratio_interpretation(bifurcation_ratio)},
-        "Stream Order": {"value": max(stream_order), "unit": "", "interpretation": f"Highest stream order (Strahler): {max(stream_order)}"},
-        "Mean Stream Length (Lm)": {"value": mean_stream_length, "unit": "km", "interpretation": "Average length of streams"},
-        "Drainage Intensity (Id)": {"value": drainage_intensity, "unit": "", "interpretation": get_drainage_intensity_interpretation(drainage_intensity)},
-        "Main Channel Gradient": {"value": main_channel_gradient, "unit": "m/km", "interpretation": get_main_channel_gradient_interpretation(main_channel_gradient)},
-        "Main Channel Sinuosity": {"value": main_channel_sinuosity, "unit": "", "interpretation": get_main_channel_sinuosity_interpretation(main_channel_sinuosity)},
-        "Main Channel Length (Lc)": {"value": main_channel_length, "unit": "km", "interpretation": "Length of the main channel"},
-        "Total Length of Channels (Lt)": {"value": total_stream_length, "unit": "km", "interpretation": "Total length of all channels"},
-        "Number of Streams (Nu)": {"value": total_stream_number, "unit": "", "interpretation": "Total number of streams"},
-        "Drainage Texture (Dt)": {"value": drainage_texture, "unit": "", "interpretation": get_drainage_texture_interpretation(drainage_texture)},
-        "Infiltration Number (If)": {"value": infiltration_number, "unit": "", "interpretation": get_infiltration_number_interpretation(infiltration_number)},
-        "Fitness Ratio (Rf)": {"value": fitness_ratio, "unit": "", "interpretation": get_fitness_ratio_interpretation(fitness_ratio)},
-        "Asymmetry Factor (Af)": {"value": asymmetry_factor, "unit": "", "interpretation": get_asymmetry_factor_interpretation(asymmetry_factor)},
-        "Orographic Coefficient (Oc)": {"value": orographic_coefficient, "unit": "", "interpretation": get_orographic_coefficient_interpretation(orographic_coefficient)},
-        "Massivity Index": {"value": massivity_index, "unit": "m/km²", "interpretation": get_massivity_index_interpretation(massivity_index)},
-        "Junction Density": {"value": junction_density, "unit": "junctions/km²", "interpretation": get_junction_density_interpretation(junction_density)},
-        "Storage Coefficient": {"value": storage_coefficient, "unit": "km", "interpretation": get_storage_coefficient_interpretation(storage_coefficient)}
     }
 
 
@@ -257,12 +263,90 @@ def calculate_stream_order(streams_source, stream_order_field):
             stream_order.append(1)  # Assume all streams are first order if no order field exists
     return stream_order
 
-def calculate_asymmetry_factor(basin_source, pour_point):
-    # Implement the calculation for the asymmetry factor
-    return 0.5  # Placeholder value
+def calculate_bifurcation_ratio(streams_source, stream_order_field):
+    """
+    Mean Bifurcation Ratio per Strahler (1952):
+    Rb = mean of (Nu / Nu+1) for all consecutive order pairs.
+    """
+    order_counts = {}
+    for f in streams_source.getFeatures():
+        order = f[stream_order_field]
+        order_counts[order] = order_counts.get(order, 0) + 1
 
-def calculate_orographic_coefficient(relief, basin_area):
-    return (relief * basin_area) / 1000  # Dividing by 1000 to get a more manageable number
+    orders = sorted(order_counts.keys())
+    if len(orders) < 2:
+        return None
+
+    ratios = [order_counts[orders[i]] / order_counts[orders[i + 1]]
+              for i in range(len(orders) - 1)]
+    return sum(ratios) / len(ratios)
+
+
+def calculate_asymmetry_factor(basin_source, streams_source, stream_order_field, pour_point):
+    """
+    Asymmetry Factor (Af) = 100 * (Ar / At)
+    Ar = area to the right of the main channel looking downstream.
+    At = total basin area. Hare & Gardner (1985).
+    """
+    try:
+        basin_geom = [f.geometry() for f in basin_source.getFeatures()][0]
+        basin_area = basin_geom.area()
+
+        max_order = max([f[stream_order_field] for f in streams_source.getFeatures()])
+        main_channel_segments = [f.geometry() for f in streams_source.getFeatures()
+                                  if f[stream_order_field] == max_order]
+        main_channel = QgsGeometry.unaryUnion(main_channel_segments)
+        if main_channel.isMultipart():
+            main_channel = main_channel.mergeLines()
+
+        vertices = main_channel.asPolyline()
+        if len(vertices) < 2:
+            return None
+
+        us = QgsPointXY(vertices[0])
+        ds = QgsPointXY(vertices[-1])
+        # Downstream point is the one closest to the pour_point
+        if QgsPointXY(pour_point).distance(us) < QgsPointXY(pour_point).distance(ds):
+            us, ds = ds, us
+
+        dx = ds.x() - us.x()
+        dy = ds.y() - us.y()
+        length = math.sqrt(dx * dx + dy * dy)
+        if length == 0:
+            return None
+
+        # Extend split line well beyond the basin
+        extent = basin_geom.boundingBox()
+        factor = extent.width() + extent.height()
+        ext_us = QgsPointXY(us.x() - dx / length * factor, us.y() - dy / length * factor)
+        ext_ds = QgsPointXY(ds.x() + dx / length * factor, ds.y() + dy / length * factor)
+
+        basin_copy = QgsGeometry(basin_geom)
+        result_code, new_parts, _ = basin_copy.splitGeometry([ext_us, ext_ds], False)
+
+        if result_code != 0 or not new_parts:
+            return None
+
+        part_geom = new_parts[0]
+        part_centroid = part_geom.centroid().asPoint()
+
+        # Cross product: negative → right side when looking upstream→downstream
+        cross = dx * (part_centroid.y() - us.y()) - dy * (part_centroid.x() - us.x())
+        right_area = part_geom.area() if cross < 0 else (basin_area - part_geom.area())
+
+        return 100.0 * (right_area / basin_area)
+    except Exception:
+        return None
+
+def calculate_orographic_coefficient(mean_elevation, basin_area):
+    """
+    Orographic Coefficient (Oc) = (Hm * A) / 1000
+    Hm = mean elevation (m), A = basin area (km²).
+    Equivalent to Hm(km) × A(km²).
+    """
+    if not basin_area or basin_area == 0:
+        return None
+    return (mean_elevation * basin_area) / 1000
 
 def linear_regression(x, y):
     """
@@ -350,6 +434,46 @@ def calculate_channel_compensated_slope(main_channel_geom, dem_layer):
         }
     }
 
+
+
+def calculate_taylor_schwartz_slope(main_channel_geom, dem_layer):
+    """
+    Taylor-Schwartz (1952) equivalent (compensated) slope:
+    Seq = [ L / Σ(lᵢ / √Sᵢ) ]²
+    L = total channel length (m), lᵢ and Sᵢ = length and slope of each reach.
+    Result in m/m.
+    """
+    vertices = main_channel_geom.asPolyline()
+    if len(vertices) < 2:
+        return None
+
+    total_length = 0.0
+    sum_term = 0.0
+
+    for i in range(len(vertices) - 1):
+        pt1 = QgsPointXY(vertices[i])
+        pt2 = QgsPointXY(vertices[i + 1])
+        elev1 = neighbor_average_interpolation(dem_layer, pt1)
+        elev2 = neighbor_average_interpolation(dem_layer, pt2)
+
+        if elev1 is None or elev2 is None:
+            continue
+
+        seg_length = pt1.distance(pt2)
+        if seg_length == 0:
+            continue
+
+        seg_slope = abs(elev1 - elev2) / seg_length  # m/m
+        if seg_slope <= 0:
+            continue
+
+        total_length += seg_length
+        sum_term += seg_length / math.sqrt(seg_slope)
+
+    if sum_term == 0 or total_length == 0:
+        return None
+
+    return (total_length / sum_term) ** 2
 
 
 # Interpretations
@@ -545,9 +669,11 @@ def get_asymmetry_factor_interpretation(asymmetry_factor):
         return "Significant tilt to the left (looking downstream)"
 
 def get_orographic_coefficient_interpretation(orographic_coefficient):
-    if orographic_coefficient < 6:
+    if orographic_coefficient is None:
+        return "Unable to calculate orographic coefficient"
+    elif orographic_coefficient < 10:
         return "Low orographic influence"
-    elif 6 <= orographic_coefficient < 18:
+    elif 10 <= orographic_coefficient < 50:
         return "Moderate orographic influence"
     else:
         return "High orographic influence"
@@ -582,17 +708,21 @@ def get_schumms_elongation_ratio_interpretation(elongation_ratio):
         return "Circular basin"
 
 def get_main_channel_gradient_interpretation(gradient):
-    if gradient < 0.005:
+    if gradient is None:
+        return "Unable to calculate main channel gradient"
+    elif gradient < 5:
         return "Very low gradient, indicative of a flat channel"
-    elif 0.005 <= gradient < 0.02:
+    elif 5 <= gradient < 20:
         return "Low gradient channel"
-    elif 0.02 <= gradient < 0.04:
+    elif 20 <= gradient < 40:
         return "Moderate gradient channel"
     else:
         return "High gradient channel"
 
 def get_main_channel_sinuosity_interpretation(sinuosity):
-    if sinuosity < 1.05:
+    if sinuosity is None:
+        return "Unable to calculate main channel sinuosity"
+    elif sinuosity < 1.05:
         return "Almost straight channel"
     elif 1.05 <= sinuosity < 1.25:
         return "Winding channel"
