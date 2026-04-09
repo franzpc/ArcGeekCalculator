@@ -67,6 +67,28 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
                 feedback.reportError('Input layers have different Coordinate Reference Systems (CRS)')
                 return {}
 
+            crs = basin_layer.crs()
+            if crs.isGeographic():
+                feedback.reportError(
+                    f'The CRS "{crs.authid()} - {crs.description()}" uses geographic coordinates (degrees). '
+                    'All input layers must be in a projected coordinate system (meters) for morphometric '
+                    'calculations to be correct. Please reproject your layers to a suitable projected CRS '
+                    '(e.g. UTM) before running this tool.'
+                )
+                return {}
+
+            units = crs.mapUnits()
+            try:
+                from qgis.core import QgsUnitTypes
+                is_meters = (units == QgsUnitTypes.DistanceMeters)
+            except Exception:
+                is_meters = True  # cannot determine, allow through
+            if not is_meters:
+                feedback.pushWarning(
+                    f'Warning: The CRS "{crs.authid()}" map units are not meters. '
+                    'Results involving area, length, and slope may be in unexpected units.'
+                )
+
             feedback.pushInfo('Processing morphometric analysis...')
 
             dem_clipped = self.clip_dem_by_basin(dem_layer, basin_layer, context, feedback)
