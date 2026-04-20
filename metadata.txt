@@ -3,16 +3,15 @@ name=ArcGeek Calculator
 qgisMinimumVersion=3.40
 qgisMaximumVersion=4.99
 description=ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, 3D CAD integration, topographic profiling, machine learning classification, path optimization, and forestry planning in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, foresters, and anyone working with spatial data.
-version=4.0.8
+version=4.0.9
 author=ArcGeek
 email=soporte@arcgeek.com
 about=Developed by Franz Pucha-Cofrep, 2024-2026. ArcGeek Calculator provides a comprehensive suite of tools for GIS analysis, hydrology, topography, and planning. Includes the new Multiple Basin Delineation tool.
 
-# Key Features - Version 4.0.8
+# Key Features - Version 4.0.9
 
-## NEW in Version 4.0.8:
-    - Added AI MCP Server (Model Context Protocol) integration for Claude Desktop based on QGISMCP by jjsantos01
-    - Included bundled Python MCP client for seamless configuration
+## NEW in Version 4.0.9:
+    - Minor bug fixes and improvements
 
 ## Changes in Version 4.0.6:
     - Added Multiple Basin Delineation tool (contribution by Anthropocene Engineering team - anthroeng.com)

@@ -5,7 +5,8 @@ from qgis.core import (QgsProcessingAlgorithm,
                        QgsCoordinateReferenceSystem, QgsRasterBandStats,
                        QgsProcessingMultiStepFeedback,
                        QgsProcessingParameterEnum,
-                       QgsVectorFileWriter, QgsCoordinateTransformContext)
+                       QgsVectorFileWriter, QgsCoordinateTransformContext,
+                       QgsProcessingUtils)
 from qgis.PyQt.QtCore import QCoreApplication
 import processing
 import requests
@@ -27,11 +28,16 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
         self.hc = ["Poor", "Fair", "Good"]
         self.arc = ["I", "II", "III"]
         
+        try:
+            _poly_type = QgsProcessing.SourceType.TypeVectorPolygon
+        except AttributeError:
+            _poly_type = QgsProcessing.TypeVectorPolygon
+
         self.addParameter(
             QgsProcessingParameterVectorLayer(
                 self.INPUT_AREA,
                 self.tr('Study Area'),
-                [QgsProcessing.TypeVectorPolygon]
+                [_poly_type]
             )
         )
         
@@ -99,7 +105,11 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
                 'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:4326'),
                 'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
             }, context=context, feedback=feedback)
-            aoi = result['OUTPUT']
+            aoi_result = result['OUTPUT']
+            if not hasattr(aoi_result, 'isValid'):
+                aoi = QgsProcessingUtils.mapLayerFromString(str(aoi_result), context)
+            else:
+                aoi = aoi_result
 
         vrt_path = os.path.join(os.path.dirname(__file__), 'data', 'esa_worldcover_2021.vrt')
         if not os.path.exists(vrt_path):
@@ -142,7 +152,8 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
                 QgsVectorFileWriter.writeAsVectorFormat(aoi, _aoi_mask, 'UTF-8', aoi.crs(), 'GPKG')
             _cn_in = temp_cn_raster if isinstance(temp_cn_raster, str) else \
                 temp_cn_raster.dataProvider().dataSourceUri().split('|')[0]
-            clipped_cn = parameters[self.OUTPUT_CN]
+            clipped_cn = self.parameterAsOutputLayer(parameters, self.OUTPUT_CN, context)
+            gdal.UseExceptions()
             gdal.Warp(clipped_cn, _cn_in,
                       cutlineDSName=_aoi_mask, cropToCutline=True, format='GTiff')
 
@@ -388,7 +399,11 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
                 return
                 
             provider = raster.dataProvider()
-            stats = provider.bandStatistics(1, QgsRasterBandStats.All)
+            try:
+                _all_stats = QgsRasterBandStats.Statistic.All
+            except AttributeError:
+                _all_stats = QgsRasterBandStats.All
+            stats = provider.bandStatistics(1, _all_stats)
             
             mean_cn = stats.mean
             S = (25400 / mean_cn) - 254

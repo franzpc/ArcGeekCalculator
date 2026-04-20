@@ -136,7 +136,7 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
     time_of_concentration_ventura_heras = middle_distance * (basin_area ** 0.5 / slope_percent) if slope_percent and slope_percent > 0 else None
     time_of_concentration_passini = middle_distance * ((basin_area * main_channel_length) ** (1/3)) / (slope_percent ** 0.5) if slope_percent and slope_percent > 0 else None
 
-    time_of_concentration_california_culverts = 0.0195 * (main_channel_length ** 3 / relief) ** 0.385 if relief > 0 else None
+    time_of_concentration_california_culverts = (0.0195 * ((main_channel_length * 1000) ** 3 / relief) ** 0.385) / 60 if relief > 0 else None
     time_of_concentration_bransby_williams = 0.243 * (main_channel_length / (basin_area ** 0.1 * (slope_s * 1000) ** 0.2)) if slope_s and slope_s > 0 else None
     time_of_concentration_johnstone_cross = 2.6 * (main_channel_length / (slope_s * 1000) ** 0.5) ** 0.5 if slope_s and slope_s > 0 else None
     time_of_concentration_clark = 0.335 * (basin_area / (slope_s * 1000) ** 0.5) ** 0.593 if slope_s and slope_s > 0 else None
@@ -239,6 +239,7 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
         "Time of Concentration - Bransby-Williams (Tc)": {"value": time_of_concentration_bransby_williams, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_bransby_williams)},
         "Time of Concentration - Johnstone-Cross (Tc)": {"value": time_of_concentration_johnstone_cross, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_johnstone_cross)},
         "Time of Concentration - Clark (Tc)": {"value": time_of_concentration_clark, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_clark)},
+        "Time of Concentration - California Culverts (Tc)": {"value": time_of_concentration_california_culverts, "unit": "hours", "interpretation": get_time_of_concentration_interpretation(time_of_concentration_california_culverts)},
     }
 
 
