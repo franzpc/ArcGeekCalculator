@@ -2,16 +2,49 @@ import os
 import io
 import sys
 import json
+import shutil
 import socket
 import traceback
 from qgis.core import *
 from qgis.gui import *
 from qgis.PyQt.QtCore import QObject, pyqtSignal, QTimer, Qt, QSize
-from qgis.PyQt.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QSpinBox, QWidget
-from qgis.PyQt.QtGui import QIcon, QColor
+from qgis.PyQt.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
+                                  QPushButton, QSpinBox, QWidget, QLineEdit,
+                                  QTextEdit, QApplication)
+from qgis.PyQt.QtGui import QIcon, QColor, QFont  # QFont used in config dialog
 
 from qgis.PyQt.QtWidgets import QAction
 from qgis.utils import active_plugins
+
+SERVER_DIR = os.path.join(os.path.expanduser("~"), ".qgis_mcp_server")
+_SRC_DIR   = os.path.join(os.path.dirname(__file__), "server_mcp")
+
+
+def _setup_server_files():
+    """Copy server files to ~/.qgis_mcp_server (first-time only). No uv sync needed."""
+    server_py = os.path.join(SERVER_DIR, "qgis_mcp_server.py")
+    if os.path.isfile(server_py):
+        return True, None
+
+    os.makedirs(SERVER_DIR, exist_ok=True)
+    for fname in ("qgis_mcp_server.py", "pyproject.toml", "uv.lock"):
+        shutil.copy2(os.path.join(_SRC_DIR, fname), SERVER_DIR)
+    return True, None
+
+
+def _build_config_json():
+    """Return the Claude Desktop config JSON string with the correct server path."""
+    uv_name = "uv.exe" if sys.platform == "win32" else "uv"
+    uv = shutil.which("uv") or os.path.join(os.path.expanduser("~"), ".local", "bin", uv_name)
+    config = {
+        "mcpServers": {
+            "qgis": {
+                "command": uv,
+                "args": ["--directory", SERVER_DIR, "run", "qgis_mcp_server.py"]
+            }
+        }
+    }
+    return json.dumps(config, indent=2)
 
 # Compatibilidad de enums QGIS 3 / QGIS 4
 try:
@@ -267,7 +300,7 @@ class QgisMCPServer(QObject):
             }
             
             # Execute the code
-            exec(code, namespace)
+            exec(code, namespace)  # nosec B102
             
             # Restore stdout and stderr
             sys.stdout = original_stdout
@@ -540,7 +573,7 @@ class QgisMCPDialog(QDialog):
     
     def __init__(self, iface):
         super().__init__(iface.mainWindow())
-        self.setWindowTitle("MCP Server (based on QGISMCP by jjsantos01)")
+        self.setWindowTitle("MCP Server")
         # Compatibilidad Qt5 / Qt6 para WindowFlags
         if hasattr(Qt, "WindowType") and hasattr(Qt.WindowType, "Tool"):
             tool_flag = Qt.WindowType.Tool
@@ -589,13 +622,104 @@ class QgisMCPDialog(QDialog):
         self.status_label = QLabel("Server: Stopped")
         self.status_label.setAlignment(align_center)
         layout.addWidget(self.status_label)
-        
+
+        cfg_btn = QPushButton("How to connect Claude Code / Antigravity / Cursor")
+        cfg_btn.clicked.connect(self._show_config_dialog)
+        layout.addWidget(cfg_btn)
+
+        self.setup_label = QLabel("")
+        self.setup_label.setAlignment(align_center)
+        layout.addWidget(self.setup_label)
+        self._refresh_setup_label()
+
+    def _refresh_setup_label(self):
+        ready = os.path.isfile(os.path.join(SERVER_DIR, "qgis_mcp_server.py"))
+        if ready:
+            self.setup_label.setText('<span style="color:green">Server files ready</span>')
+        else:
+            self.setup_label.setText('<span style="color:orange">Files will be copied on first Start</span>')
+
+    def _show_config_dialog(self):
+        if sys.platform == "win32":
+            uv_install = (
+                'powershell -ExecutionPolicy ByPass -c '
+                '"irm https://astral.sh/uv/install.ps1 | iex"'
+            )
+            cfg_path = r"%APPDATA%\Claude\claude_desktop_config.json"
+            os_name = "Windows"
+        elif sys.platform == "darwin":
+            uv_install = "brew install uv"
+            cfg_path = "~/Library/Application Support/Claude/claude_desktop_config.json"
+            os_name = "macOS"
+        else:
+            uv_install = "curl -LsSf https://astral.sh/uv/install.sh | sh"
+            cfg_path = "~/.config/Claude/claude_desktop_config.json"
+            os_name = "Linux"
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Connect Claude Code / Antigravity / Cursor — MCP Setup")
+        dlg.setMinimumWidth(520)
+        layout = QVBoxLayout(dlg)
+
+        header = QLabel(
+            "<b>Works with:</b> Claude Code, Claude Desktop, Antigravity, Cursor, "
+            "and any MCP-compatible client."
+        )
+        header.setWordWrap(True)
+        layout.addWidget(header)
+
+        layout.addWidget(QLabel(f"<b>Step 1 — Install uv on {os_name}:</b>"))
+        uv_row = QHBoxLayout()
+        uv_edit = QLineEdit(uv_install)
+        uv_edit.setReadOnly(True)
+        uv_edit.setFont(QFont("Courier New", 8))
+        copy_uv_btn = QPushButton("Copy")
+        copy_uv_btn.setFixedWidth(55)
+        copy_uv_btn.clicked.connect(lambda: QApplication.clipboard().setText(uv_install))
+        uv_row.addWidget(uv_edit)
+        uv_row.addWidget(copy_uv_btn)
+        layout.addLayout(uv_row)
+
+        layout.addWidget(QLabel(
+            f"<b>Step 2 — Add this block to your MCP config file:</b><br>"
+            f"<code>{cfg_path}</code>"
+        ))
+        code_edit = QTextEdit()
+        code_edit.setReadOnly(True)
+        code_edit.setFont(QFont("Courier New", 9))
+        code_edit.setFixedHeight(120)
+        code_edit.setPlainText(_build_config_json())
+        layout.addWidget(code_edit)
+
+        btn_row = QHBoxLayout()
+        copy_btn = QPushButton("Copy configuration")
+        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(_build_config_json()))
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        btn_row.addWidget(copy_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+        try:
+            dlg.exec()
+        except AttributeError:
+            dlg.exec_()
+
     def start_server(self):
-        """Start the server"""
+        """Start the server, copying files on first run if needed."""
+        if not os.path.isfile(os.path.join(SERVER_DIR, "qgis_mcp_server.py")):
+            ok, err = _setup_server_files()
+            if not ok:
+                self.status_label.setText(f"Setup failed: {err}")
+                QgsMessageLog.logMessage(f"MCP setup error: {err}", "QGIS MCP", MSG_CRITICAL)
+                return
+            self._refresh_setup_label()
+
         if not self.server:
             port = self.port_spin.value()
             self.server = QgisMCPServer(port=port, iface=self.iface)
-            
+
         if self.server.start():
             self.status_label.setText(f"Server: Running on port {self.server.port}")
             self.start_button.setEnabled(False)

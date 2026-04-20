@@ -331,15 +331,6 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
     def calculate_cn(self, landcover, soil, output_path, hc_index, arc_index, context, feedback):
         cn_values = self.get_cn_values(hc_index, arc_index)
         
-        expressions = []
-        for lc_code, soil_values in cn_values.items():
-            for soil_code, cn in soil_values.items():
-                expressions.append(
-                    f'(A=={lc_code})*(B=={soil_code})*{cn}'
-                )
-        
-        formula = '+'.join(expressions)
-        
         import numpy as np
         _lc_path = landcover if isinstance(landcover, str) else \
             landcover.dataProvider().dataSourceUri().split('|')[0]
@@ -349,7 +340,11 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
         _soil_ds = gdal.Open(_soil_path)
         A = _lc_ds.GetRasterBand(1).ReadAsArray().astype(np.float32)
         B = _soil_ds.GetRasterBand(1).ReadAsArray().astype(np.float32)
-        cn_result = eval(formula).astype(np.float32)
+        cn_result = np.zeros_like(A, dtype=np.float32)
+        for lc_code, soil_values in cn_values.items():
+            for soil_code, cn in soil_values.items():
+                cn_result += (A == lc_code) * (B == int(soil_code)) * cn
+        cn_result = cn_result.astype(np.float32)
         _out = output_path if output_path != QgsProcessing.TEMPORARY_OUTPUT else \
             os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'cn.tif')
         _drv = gdal.GetDriverByName('GTiff')

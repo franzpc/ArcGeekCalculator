@@ -1,5 +1,5 @@
 # ArcGeek Calculator Plugin
-Version 4.0.9
+Version 4.1.1
 
 ## Description
 ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, 3D CAD integration, topographic profiling, machine learning classification, path optimization, and forestry planning in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, foresters, and anyone working with spatial data.
@@ -87,12 +87,16 @@ pip install pykrige scipy scikit-learn numpy matplotlib seaborn plotly
 ```
 
 ## AI MCP Server Configuration
-To use the AI MCP Server with Claude Desktop, you must install `uv`:
+The MCP Server allows any compatible AI client to control QGIS directly: **Claude Code, Claude Desktop, Antigravity, Cursor**, and any other tool that supports the Model Context Protocol.
+
+To use it, you must first install `uv`:
 - **Windows (PowerShell)**: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
 - **Mac**: `brew install uv`
 - **Linux**: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 
-Once installed, add the following configuration to your `claude_desktop_config.json`, replacing the path with the actual location of the plugin on your system:
+Once `uv` is installed, open the **MCP Server** tool in QGIS and click **"How to connect Claude / Antigravity (first time only)"**. This button copies the exact configuration JSON for your system to the clipboard — the server path is resolved automatically for your username and OS.
+
+Paste that configuration into your `claude_desktop_config.json`. The server files are automatically copied to `~/.qgis_mcp_server/` the first time you click **Start Server** — the `uv` environment is created by `uv run` on first connection.
 
 **Windows** (`C:\Users\[YOUR_USERNAME]\AppData\Roaming\Claude\claude_desktop_config.json`):
 ```json
@@ -102,7 +106,7 @@ Once installed, add the following configuration to your `claude_desktop_config.j
       "command": "uv",
       "args": [
         "--directory",
-        "C:\\Users\\[YOUR_USERNAME]\\AppData\\Roaming\\QGIS\\QGIS3\\profiles\\default\\python\\plugins\\ArcGeekCalculator\\scripts\\qgis_mcp\\server_mcp",
+        "C:\\Users\\[YOUR_USERNAME]\\.qgis_mcp_server",
         "run",
         "qgis_mcp_server.py"
       ]
@@ -119,7 +123,7 @@ Once installed, add the following configuration to your `claude_desktop_config.j
       "command": "uv",
       "args": [
         "--directory",
-        "/Users/[YOUR_USERNAME]/Library/Application Support/QGIS/QGIS3/profiles/default/python/plugins/ArcGeekCalculator/scripts/qgis_mcp/server_mcp",
+        "/Users/[YOUR_USERNAME]/.qgis_mcp_server",
         "run",
         "qgis_mcp_server.py"
       ]
@@ -136,7 +140,7 @@ Once installed, add the following configuration to your `claude_desktop_config.j
       "command": "uv",
       "args": [
         "--directory",
-        "/home/[YOUR_USERNAME]/.local/share/QGIS/QGIS3/profiles/default/python/plugins/ArcGeekCalculator/scripts/qgis_mcp/server_mcp",
+        "/home/[YOUR_USERNAME]/.qgis_mcp_server",
         "run",
         "qgis_mcp_server.py"
       ]
@@ -163,7 +167,7 @@ ArcGeek - Franz Pucha-Cofrep
 
 ## Version History
 
-**4.0.9**:
+**4.1.1**:
 - Minor bug fixes and improvements
 
 **4.0.8**:
