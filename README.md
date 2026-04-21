@@ -103,7 +103,7 @@ Paste that configuration into your `claude_desktop_config.json`. The server file
 {
   "mcpServers": {
     "qgis": {
-      "command": "uv",
+      "command": "C:\\Users\\[YOUR_USERNAME]\\.local\\bin\\uv.exe",
       "args": [
         "--directory",
         "C:\\Users\\[YOUR_USERNAME]\\.qgis_mcp_server",
@@ -120,7 +120,7 @@ Paste that configuration into your `claude_desktop_config.json`. The server file
 {
   "mcpServers": {
     "qgis": {
-      "command": "uv",
+      "command": "/Users/[YOUR_USERNAME]/.local/bin/uv",
       "args": [
         "--directory",
         "/Users/[YOUR_USERNAME]/.qgis_mcp_server",
@@ -137,7 +137,7 @@ Paste that configuration into your `claude_desktop_config.json`. The server file
 {
   "mcpServers": {
     "qgis": {
-      "command": "uv",
+      "command": "/home/[YOUR_USERNAME]/.local/bin/uv",
       "args": [
         "--directory",
         "/home/[YOUR_USERNAME]/.qgis_mcp_server",
