@@ -174,6 +174,7 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
                   cutlineDSName=_mask_path, cropToCutline=True, format='GTiff')
         return QgsRasterLayer(_out_path, 'Clipped DEM')
 
+
     def calculate_pour_point(self, streams_layer, stream_order_field):
         max_order = max([f[stream_order_field] for f in streams_layer.getFeatures()])
         main_channel_segments = [f.geometry() for f in streams_layer.getFeatures() if f[stream_order_field] == max_order]

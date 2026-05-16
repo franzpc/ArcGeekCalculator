@@ -9,7 +9,9 @@ from qgis.core import (QgsProcessingAlgorithm,
                        QgsProcessingUtils)
 from qgis.PyQt.QtCore import QCoreApplication
 import processing
-import requests
+import urllib.request
+import urllib.error
+from urllib.parse import urlparse
 import os
 import tempfile
 import csv
@@ -155,7 +157,8 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             clipped_cn = self.parameterAsOutputLayer(parameters, self.OUTPUT_CN, context)
             gdal.UseExceptions()
             gdal.Warp(clipped_cn, _cn_in,
-                      cutlineDSName=_aoi_mask, cropToCutline=True, format='GTiff')
+                      cutlineDSName=_aoi_mask, cropToCutline=True, format='GTiff',
+                      dstNodata=0)
 
             results[self.OUTPUT_CN] = clipped_cn
 
@@ -190,14 +193,16 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
         
         base_url = "https://arcgeek.com/hysog_tiles/"
         tiles_info_url = f"{base_url}tiles_info.csv"
-        
+
         try:
             feedback.pushInfo('Downloading tiles information...')
-            response = requests.get(tiles_info_url, timeout=30)
-            response.raise_for_status()
-            
+            if urlparse(tiles_info_url).scheme not in ('http', 'https'):
+                raise QgsProcessingException('Invalid URL scheme for tiles info')
+            with urllib.request.urlopen(tiles_info_url, timeout=30) as response:  # nosec B310
+                csv_text = response.read().decode('utf-8')
+
             required_tiles = []
-            lines = response.text.strip().split('\n')
+            lines = csv_text.strip().split('\n')
             header = lines[0].split(',')
             
             for line in lines[1:]:
@@ -231,13 +236,9 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
                 tile_url = f"{base_url}{tile_name}"
                 temp_tile_path = os.path.join(temp_dir, tile_name)
                 
-                response = requests.get(tile_url, stream=True, timeout=60)
-                response.raise_for_status()
-                
-                with open(temp_tile_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
+                if urlparse(tile_url).scheme not in ('http', 'https'):
+                    raise QgsProcessingException(f'Invalid URL scheme for tile: {tile_name}')
+                urllib.request.urlretrieve(tile_url, temp_tile_path)  # nosec B310
                 
                 downloaded_tiles.append(temp_tile_path)
             
@@ -307,7 +308,7 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
                 
             return result
             
-        except requests.RequestException as e:
+        except urllib.error.URLError as e:
             raise QgsProcessingException(f'Error downloading HYSOG tiles: {str(e)}')
         except Exception as e:
             raise QgsProcessingException(f'Error processing HYSOG data: {str(e)}')
