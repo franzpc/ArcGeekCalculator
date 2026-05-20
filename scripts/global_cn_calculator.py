@@ -187,8 +187,10 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
         return out_path
 
     def _fetch_url(self, url, headers=None, timeout=30):
-        req = urllib.request.Request(url, headers=headers or {})  # nosec B310
-        with urllib.request.urlopen(req, timeout=timeout) as response:
+        if urlparse(url).scheme not in ('http', 'https'):
+            raise QgsProcessingException(f'Invalid URL scheme: {url}')
+        req = urllib.request.Request(url, headers=headers or {})
+        with urllib.request.urlopen(req, timeout=timeout) as response:  # nosec B310
             return response.read()
 
     def _fetch_with_fallback(self, primary_url, fallback_url, feedback, label=''):
