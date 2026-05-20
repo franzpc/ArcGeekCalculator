@@ -186,14 +186,12 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
                        format='GTiff')
         return out_path
 
-    def process_soil_data_tiles(self, aoi, parameters, context, feedback):
-        extent = aoi.extent()
-        min_lon, max_lon = extent.xMinimum(), extent.xMaximum()
-        min_lat, max_lat = extent.yMinimum(), extent.yMaximum()
-        
-        base_url = "https://arcgeek.com/hysog_tiles/"
-        tiles_info_url = f"{base_url}tiles_info.csv"
+    def _fetch_url(self, url, headers=None, timeout=30):
+        req = urllib.request.Request(url, headers=headers or {})  # nosec B310
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            return response.read()
 
+    def _fetch_with_fallback(self, primary_url, fallback_url, feedback, label=''):
         _headers = {
             'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                            'AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -201,14 +199,27 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Referer': 'https://arcgeek.com/',
         }
+        try:
+            return self._fetch_url(primary_url, headers=_headers, timeout=10)
+        except urllib.error.URLError as e:
+            feedback.pushWarning(f'Primary server unavailable ({e.reason}), switching to GitHub fallback{" for " + label if label else ""}...')
+            return self._fetch_url(fallback_url, timeout=60)
+
+    def process_soil_data_tiles(self, aoi, parameters, context, feedback):
+        extent = aoi.extent()
+        min_lon, max_lon = extent.xMinimum(), extent.xMaximum()
+        min_lat, max_lat = extent.yMinimum(), extent.yMaximum()
+
+        _PRIMARY = "https://arcgeek.com/hysog_tiles/"
+        _FALLBACK = "https://github.com/franzpc/ArcGeekCalculator/releases/download/hysog-tiles-v1/"
 
         try:
             feedback.pushInfo('Downloading tiles information...')
-            if urlparse(tiles_info_url).scheme not in ('http', 'https'):
-                raise QgsProcessingException('Invalid URL scheme for tiles info')
-            req = urllib.request.Request(tiles_info_url, headers=_headers)  # nosec B310
-            with urllib.request.urlopen(req, timeout=30) as response:
-                csv_text = response.read().decode('utf-8')
+            csv_text = self._fetch_with_fallback(
+                _PRIMARY + "tiles_info.csv",
+                _FALLBACK + "tiles_info.csv",
+                feedback, label='tiles index'
+            ).decode('utf-8')
 
             required_tiles = []
             lines = csv_text.strip().split('\n')
@@ -242,15 +253,14 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             
             for i, tile_name in enumerate(required_tiles):
                 feedback.pushInfo(f'Downloading tile {i+1}/{len(required_tiles)}: {tile_name}')
-                tile_url = f"{base_url}{tile_name}"
                 temp_tile_path = os.path.join(temp_dir, tile_name)
-                
-                if urlparse(tile_url).scheme not in ('http', 'https'):
-                    raise QgsProcessingException(f'Invalid URL scheme for tile: {tile_name}')
-                tile_req = urllib.request.Request(tile_url, headers=_headers)  # nosec B310
-                with urllib.request.urlopen(tile_req, timeout=120) as tile_resp:
-                    with open(temp_tile_path, 'wb') as f:
-                        f.write(tile_resp.read())
+                tile_data = self._fetch_with_fallback(
+                    _PRIMARY + tile_name,
+                    _FALLBACK + tile_name,
+                    feedback, label=tile_name
+                )
+                with open(temp_tile_path, 'wb') as f:
+                    f.write(tile_data)
                 
                 downloaded_tiles.append(temp_tile_path)
             
@@ -321,7 +331,7 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             return result
             
         except urllib.error.URLError as e:
-            raise QgsProcessingException(f'Error downloading HYSOG tiles: {str(e)}')
+            raise QgsProcessingException(f'Error downloading HYSOG tiles (both primary and fallback failed): {str(e)}')
         except Exception as e:
             raise QgsProcessingException(f'Error processing HYSOG data: {str(e)}')
 
