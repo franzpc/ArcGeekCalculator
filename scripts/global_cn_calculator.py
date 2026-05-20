@@ -194,11 +194,20 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
         base_url = "https://arcgeek.com/hysog_tiles/"
         tiles_info_url = f"{base_url}tiles_info.csv"
 
+        _headers = {
+            'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                           'AppleWebKit/537.36 (KHTML, like Gecko) '
+                           'Chrome/124.0.0.0 Safari/537.36'),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Referer': 'https://arcgeek.com/',
+        }
+
         try:
             feedback.pushInfo('Downloading tiles information...')
             if urlparse(tiles_info_url).scheme not in ('http', 'https'):
                 raise QgsProcessingException('Invalid URL scheme for tiles info')
-            with urllib.request.urlopen(tiles_info_url, timeout=30) as response:  # nosec B310
+            req = urllib.request.Request(tiles_info_url, headers=_headers)  # nosec B310
+            with urllib.request.urlopen(req, timeout=30) as response:
                 csv_text = response.read().decode('utf-8')
 
             required_tiles = []
@@ -238,7 +247,10 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
                 
                 if urlparse(tile_url).scheme not in ('http', 'https'):
                     raise QgsProcessingException(f'Invalid URL scheme for tile: {tile_name}')
-                urllib.request.urlretrieve(tile_url, temp_tile_path)  # nosec B310
+                tile_req = urllib.request.Request(tile_url, headers=_headers)  # nosec B310
+                with urllib.request.urlopen(tile_req, timeout=120) as tile_resp:
+                    with open(temp_tile_path, 'wb') as f:
+                        f.write(tile_resp.read())
                 
                 downloaded_tiles.append(temp_tile_path)
             
