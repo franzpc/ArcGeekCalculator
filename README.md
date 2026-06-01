@@ -149,7 +149,7 @@ ArcGeek - Franz Pucha-Cofrep
 ## Version History
 
 **4.1.6**:
-- MCP Server: refactor and backward compatibility with upgrade notice for old configurations
+- MCP Server updated to 51 tools with backward compatibility for existing configurations
 
 **4.1.5**:
 - Fix Global CN: URL scheme validation in fetch helper to pass Bandit B310 security scan

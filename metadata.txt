@@ -11,7 +11,7 @@ about=Developed by Franz Pucha-Cofrep, 2024-2026. ArcGeek Calculator provides a 
 # Key Features - Version 4.1.6
 
 ## NEW in Version 4.1.6:
-    - MCP Server: refactor and backward compatibility with upgrade notice for old configurations
+    - MCP Server updated to 51 tools with backward compatibility for existing configurations
 
 ## Changes in Version 4.1.5:
     - Global CN: fix Bandit B310 security issue in URL fetch helper
