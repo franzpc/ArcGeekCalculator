@@ -63,10 +63,10 @@ except AttributeError:
 
 ## MCP Server architecture
 
-`scripts/qgis_mcp/` has two separate processes that communicate via TCP socket on port 9876:
+The MCP architecture communicates via a length-prefixed TCP socket on port 9876:
 
-- **`qgis_mcp_plugin.py`** — runs inside QGIS. `QgisMCPServer` listens on a socket using a `QTimer` (non-blocking, 100ms polling) to stay on the Qt main thread. Executes QGIS commands received as JSON.
-- **`server_mcp/qgis_mcp_server.py`** — runs outside QGIS (via `uv`). Acts as the MCP server that Claude Desktop connects to. Translates MCP tool calls into JSON commands sent to the QGIS socket.
+- **`qgis_mcp_plugin.py`** — runs inside QGIS. `QgisMCPServer` listens on a socket using a `QTimer` (non-blocking, 25ms polling) to stay on the Qt main thread. Executes QGIS commands received as JSON prefixed with their length (`struct.Struct(">I")`).
+- **External Server** — runs outside QGIS (via `uvx --from git+https://github.com/nkarasiak/qgis-mcp qgis-mcp-server`). Acts as the FastMCP server that Claude Desktop connects to. Translates MCP tool calls into JSON commands sent to the QGIS socket.
 
 Commands are plain JSON: `{"type": "command_name", "params": {...}}`.
 

@@ -1,5 +1,5 @@
 # ArcGeek Calculator Plugin
-Version 4.1.5
+Version 4.1.6
 
 ## Description
 ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, 3D CAD integration, topographic profiling, machine learning classification, path optimization, and forestry planning in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, foresters, and anyone working with spatial data.
@@ -51,7 +51,7 @@ ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools f
 ### Advanced Analysis and Remote Sensing
 22. **Kriging Analysis**: Perform spatial interpolation using Kriging (requires external libraries).
 23. **Satellite Index Calculator**: Calculate various satellite indices (NDVI, NDWI, etc.) for different satellites.
-24. **AI MCP Server**: Seamlessly control QGIS through Claude Desktop using the Model Context Protocol (integration based on QGISMCP by jjsantos01).
+24. **AI MCP Server**: Seamlessly control QGIS through Claude Desktop using the Model Context Protocol (integration powered by nkarasiak/qgis-mcp).
 
 ### Data Management and Export
 25. **Basemap Manager**: Add and manage basemaps from Google Maps, Esri, Bing, and others.
@@ -94,55 +94,36 @@ To use it, you must first install `uv`:
 - **Mac**: `brew install uv`
 - **Linux**: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 
-Once `uv` is installed, open the **MCP Server** tool in QGIS and click **"How to connect Claude / Antigravity (first time only)"**. This button copies the exact configuration JSON for your system to the clipboard — the server path is resolved automatically for your username and OS.
+Once `uv` is installed, open the **MCP Server** tool in QGIS and click **"How to connect Claude / Antigravity (first time only)"**. This button copies the exact configuration JSON for your system to the clipboard.
 
-Paste that configuration into your `claude_desktop_config.json`. The server files are automatically copied to `~/.qgis_mcp_server/` the first time you click **Start Server** — the `uv` environment is created by `uv run` on first connection.
+Paste that configuration into your `claude_desktop_config.json` (or Cursor's MCP configuration). The MCP Server is downloaded and executed directly from GitHub automatically via `uvx`.
 
-**Windows** (`C:\Users\[YOUR_USERNAME]\AppData\Roaming\Claude\claude_desktop_config.json`):
+**Windows** (`%APPDATA%\Claude\claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
     "qgis": {
-      "command": "C:\\Users\\[YOUR_USERNAME]\\.local\\bin\\uv.exe",
+      "command": "uvx",
       "args": [
-        "--directory",
-        "C:\\Users\\[YOUR_USERNAME]\\.qgis_mcp_server",
-        "run",
-        "qgis_mcp_server.py"
+        "--from",
+        "git+https://github.com/nkarasiak/qgis-mcp",
+        "qgis-mcp-server"
       ]
     }
   }
 }
 ```
 
-**Mac** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+**Mac** (`~/Library/Application Support/Claude/claude_desktop_config.json`) and **Linux** (`~/.config/Claude/claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
     "qgis": {
-      "command": "/Users/[YOUR_USERNAME]/.local/bin/uv",
+      "command": "uvx",
       "args": [
-        "--directory",
-        "/Users/[YOUR_USERNAME]/.qgis_mcp_server",
-        "run",
-        "qgis_mcp_server.py"
-      ]
-    }
-  }
-}
-```
-
-**Linux** (`~/.config/Claude/claude_desktop_config.json`):
-```json
-{
-  "mcpServers": {
-    "qgis": {
-      "command": "/home/[YOUR_USERNAME]/.local/bin/uv",
-      "args": [
-        "--directory",
-        "/home/[YOUR_USERNAME]/.qgis_mcp_server",
-        "run",
-        "qgis_mcp_server.py"
+        "--from",
+        "git+https://github.com/nkarasiak/qgis-mcp",
+        "qgis-mcp-server"
       ]
     }
   }
@@ -167,6 +148,10 @@ ArcGeek - Franz Pucha-Cofrep
 
 ## Version History
 
+**4.1.6**:
+- MCP Server: consolidate into single-file architecture with Qt5/Qt6 compatibility shim
+- MCP Server: backward-compatible protocol support — users on old configuration continue working and receive an LLM-actionable upgrade warning with JSON config and Claude Code command
+
 **4.1.5**:
 - Fix Global CN: URL scheme validation in fetch helper to pass Bandit B310 security scan
 
@@ -181,7 +166,7 @@ ArcGeek - Franz Pucha-Cofrep
 - Minor bug fixes and improvements
 
 **4.0.8**:
-- Added AI MCP Server integration for Claude Desktop (based on jjsantos01)
+- Added AI MCP Server integration for Claude Desktop (powered by nkarasiak/qgis-mcp)
 - Bundled internal Python MCP client for seamless user configuration
 
 **4.0.7**:

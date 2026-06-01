@@ -157,7 +157,7 @@ class ArcGeekCalculator:
         self.go_to_xy_dialog.show()
 
     def toggle_mcp_dialog(self):
-        from .scripts.qgis_mcp.qgis_mcp_plugin import QgisMCPDialog
+        from .scripts.qgis_mcp import QgisMCPDialog
         if not self.mcp_dialog:
             self.mcp_dialog = QgisMCPDialog(self.iface)
             
@@ -176,7 +176,7 @@ class ArcGeekCalculator:
 
         if self.mcp_dialog:
             self.mcp_dialog.stop_server()
-            self.mcp_dialog.close()
+            self.mcp_dialog.hide()
             self.mcp_dialog = None
 
         try:
