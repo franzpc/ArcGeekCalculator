@@ -149,8 +149,7 @@ ArcGeek - Franz Pucha-Cofrep
 ## Version History
 
 **4.1.6**:
-- MCP Server: consolidate into single-file architecture with Qt5/Qt6 compatibility shim
-- MCP Server: backward-compatible protocol support — users on old configuration continue working and receive an LLM-actionable upgrade warning with JSON config and Claude Code command
+- MCP Server: refactor and backward compatibility with upgrade notice for old configurations
 
 **4.1.5**:
 - Fix Global CN: URL scheme validation in fetch helper to pass Bandit B310 security scan
