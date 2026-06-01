@@ -2150,7 +2150,7 @@ class MCPConfiguratorDialog(QDialog):
                     target.symlink_to(plugin_src, target_is_directory=True)
                 except OSError:
                     subprocess.run(
-                        f'mklink /J "{target}" "{plugin_src}"', shell=True, check=True
+                        f'mklink /J "{target}" "{plugin_src}"', shell=True, check=True  # nosec B602 B605
                     )
             else:
                 target.symlink_to(plugin_src)
