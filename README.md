@@ -98,23 +98,8 @@ Once `uv` is installed, open the **MCP Server** tool in QGIS and click **"How to
 
 Paste that configuration into your `claude_desktop_config.json` (or Cursor's MCP configuration). The MCP Server is downloaded and executed directly from GitHub automatically via `uvx`.
 
-**Windows** (`%APPDATA%\Claude\claude_desktop_config.json`):
-```json
-{
-  "mcpServers": {
-    "qgis": {
-      "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/nkarasiak/qgis-mcp",
-        "qgis-mcp-server"
-      ]
-    }
-  }
-}
-```
+Config file location: `%APPDATA%\Claude\claude_desktop_config.json` (Windows) · `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac) · `~/.config/Claude/claude_desktop_config.json` (Linux)
 
-**Mac** (`~/Library/Application Support/Claude/claude_desktop_config.json`) and **Linux** (`~/.config/Claude/claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
