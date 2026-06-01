@@ -241,6 +241,9 @@ class QgisMCPServer(QObject):
                                     "[ARCGEEK WARNING: You are using the old MCP configuration "
                                     "and only have access to a limited set of tools.\n\n"
                                     "To upgrade, update your MCP client configuration:\n\n"
+                                    "NOTE: The MCP Server is part of the ArcGeek Calculator plugin (not a separate plugin). "
+                                    "To update it in QGIS, go to Plugins > Manage and Install Plugins, "
+                                    "search for 'ArcGeek Calculator' and update it there.\n\n"
                                     "For Claude Desktop / Cursor / Windsurf / Antigravity / OpenCode "
                                     "— add this to your config file:\n"
                                     '{\n'
