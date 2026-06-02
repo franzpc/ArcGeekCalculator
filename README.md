@@ -134,7 +134,7 @@ ArcGeek - Franz Pucha-Cofrep
 ## Version History
 
 **4.1.6**:
-- MCP Server updated to 51 tools with backward compatibility for existing configurations
+- MCP Server updated to 51 tools (powered by nkarasiak/qgis-mcp) with backward compatibility for existing configurations
 
 **4.1.5**:
 - Fix Global CN: URL scheme validation in fetch helper to pass Bandit B310 security scan
