@@ -3,14 +3,17 @@ name=ArcGeek Calculator
 qgisMinimumVersion=3.40
 qgisMaximumVersion=4.99
 description=ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, 3D CAD integration, topographic profiling, machine learning classification, path optimization, and forestry planning in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, foresters, and anyone working with spatial data.
-version=4.1.6
+version=4.1.7
 author=ArcGeek
 email=soporte@arcgeek.com
 about=Developed by Franz Pucha-Cofrep, 2024-2026. ArcGeek Calculator provides a comprehensive suite of tools for GIS analysis, hydrology, topography, and planning. Includes the new Multiple Basin Delineation tool.
 
-# Key Features - Version 4.1.6
+# Key Features - Version 4.1.7
 
-## NEW in Version 4.1.6:
+## NEW in Version 4.1.7:
+    - Optimized Parcel Division improved: better lot orientation, optional street frontage lines, two rows of lots per block, and division by target lot area
+
+## Changes in Version 4.1.6:
     - MCP Server updated to 51 tools with backward compatibility for existing configurations
 
 ## Changes in Version 4.1.5:
@@ -56,7 +59,7 @@ about=Developed by Franz Pucha-Cofrep, 2024-2026. ArcGeek Calculator provides a 
 ## Land Analysis and Raster Processing:
     16. Land Use Change Detection: Analyze changes in land use between two time periods.
     17. Weighted Sum Analysis: Perform weighted sum analysis on multiple raster layers.
-    18. Optimized Parcel Division: Divide rectangular parcels into lots of specified width.
+    18. Optimized Parcel Division: Divide parcels or blocks into lots by width or target area, optionally guided by street frontage lines.
     19. Dam Flood Simulation: Simulate flooding based on a DEM and specified water level.
 
 ## Machine Learning and Advanced Analysis:

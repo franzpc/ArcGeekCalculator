@@ -1,5 +1,5 @@
 # ArcGeek Calculator Plugin
-Version 4.1.6
+Version 4.1.7
 
 ## Description
 ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, 3D CAD integration, topographic profiling, machine learning classification, path optimization, and forestry planning in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, foresters, and anyone working with spatial data.
@@ -39,7 +39,7 @@ ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools f
 ### Land Analysis and Raster Processing
 16. **Land Use Change Detection**: Analyze changes in land use between two time periods.
 17. **Weighted Sum Analysis**: Perform weighted sum analysis on multiple raster layers.
-18. **Optimized Parcel Division**: Divide rectangular parcels into lots of specified width.
+18. **Optimized Parcel Division**: Divide parcels or blocks into lots by width or target area, optionally guided by street frontage lines.
 19. **Dam Flood Simulation**: Simulate flooding based on a DEM and specified water level.
 
 ### Machine Learning and Classification
@@ -133,6 +133,9 @@ ArcGeek - Franz Pucha-Cofrep
 
 ## Version History
 
+**4.1.7**:
+- Optimized Parcel Division improved: better lot orientation, optional street frontage lines, two rows of lots per block, and division by target lot area
+
 **4.1.6**:
 - MCP Server updated to 51 tools (powered by nkarasiak/qgis-mcp) with backward compatibility for existing configurations
 
@@ -214,6 +217,6 @@ ArcGeek - Franz Pucha-Cofrep
 
 If you use ArcGeek Calculator in your research or projects, please cite it as follows:
 
-Pucha-Cofrep, F. (2026). ArcGeek Calculator (Version 4.1.5) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
+Pucha-Cofrep, F. (2026). ArcGeek Calculator (Version 4.1.7) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
 
 For in-text citations, you can use: (Pucha-Cofrep, 2026) for parenthetical citations or Pucha-Cofrep (2026) for narrative citations. The citation format follows the American Psychological Association Style 7th Edition (APA 7).
