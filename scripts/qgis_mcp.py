@@ -410,6 +410,32 @@ class QgisMCPServer(QObject):
                 "save_style_qml": self.save_style_qml,
                 "create_layout": self.create_layout,
                 "add_layout_map": self.add_layout_map,
+                # Phase 7 — Spatial analysis, SQL & layout extensions
+                "duplicate_layer": self.duplicate_layer,
+                "set_layer_order": self.set_layer_order,
+                "evaluate_expression": self.evaluate_expression,
+                "identify_features": self.identify_features,
+                "execute_sql": self.execute_sql,
+                "get_unique_values": self.get_unique_values,
+                "field_calculator": self.field_calculator,
+                "export_layer": self.export_layer,
+                "raster_calculator": self.raster_calculator,
+                "zonal_statistics": self.zonal_statistics,
+                "sample_raster_values": self.sample_raster_values,
+                "spatial_join": self.spatial_join,
+                "list_processing_models": self.list_processing_models,
+                "run_model": self.run_model,
+                "get_processing_providers": self.get_processing_providers,
+                "execute_processing_batch": self.execute_processing_batch,
+                "get_layout_info": self.get_layout_info,
+                "remove_layout": self.remove_layout,
+                "add_layout_legend": self.add_layout_legend,
+                "add_layout_scalebar": self.add_layout_scalebar,
+                "add_layout_label": self.add_layout_label,
+                "add_layout_picture": self.add_layout_picture,
+                "add_layout_table": self.add_layout_table,
+                "configure_atlas": self.configure_atlas,
+                "export_atlas": self.export_atlas,
             }
 
             handler = handlers.get(cmd_type)
@@ -2060,6 +2086,565 @@ class QgisMCPServer(QObject):
         map_item.zoomToExtent(self.iface.mapCanvas().extent())
         layout.addLayoutItem(map_item)
         return {"ok": True}
+
+    # -----------------------------------------------------------------------
+    # Phase 7 — Spatial analysis, SQL & layout extensions
+    # -----------------------------------------------------------------------
+
+    def duplicate_layer(self, layer_id, new_name=None, **kwargs):
+        """Duplicate a layer (with its style) under a new name."""
+        project = QgsProject.instance()
+        if layer_id not in project.mapLayers():
+            raise Exception(f"Layer not found: {layer_id}")
+        layer = project.mapLayer(layer_id)
+        clone = layer.clone()
+        clone.setName(new_name or f"{layer.name()} copy")
+        project.addMapLayer(clone)
+        return {"ok": True, "output_layer_id": clone.id(), "name": clone.name()}
+
+    def set_layer_order(self, layer_ids, **kwargs):
+        """Set explicit layer draw order in the tree (top to bottom)."""
+        project = QgsProject.instance()
+        root = project.layerTreeRoot()
+        layers = []
+        for lid in layer_ids:
+            lyr = project.mapLayer(lid)
+            if lyr is None:
+                raise Exception(f"Layer not found: {lid}")
+            layers.append(lyr)
+        root.setHasCustomLayerOrder(True)
+        root.setCustomLayerOrder(layers)
+        return {"ok": True, "order": layer_ids}
+
+    def evaluate_expression(self, expression, layer_id=None, **kwargs):
+        """Evaluate a standalone QGIS expression to a scalar value."""
+        exp = QgsExpression(expression)
+        context = QgsExpressionContext()
+        context.appendScope(QgsExpressionContextUtils.globalScope())
+        context.appendScope(QgsExpressionContextUtils.projectScope(QgsProject.instance()))
+        if layer_id:
+            layer = self._get_vector_layer(layer_id)
+            context.appendScope(QgsExpressionContextUtils.layerScope(layer))
+        value = exp.evaluate(context)
+        if exp.hasParserError():
+            raise Exception(f"Parser error: {exp.parserErrorString()}")
+        if exp.hasEvalError():
+            raise Exception(f"Eval error: {exp.evalErrorString()}")
+        return {"expression": expression, "result": self._convert_attribute(value)}
+
+    def identify_features(self, point, tolerance=0.0, layer_ids=None, limit=10, **kwargs):
+        """Identify features at a point [x, y] (project CRS) across layers."""
+        project = QgsProject.instance()
+        x, y = float(point[0]), float(point[1])
+        pt_geom = QgsGeometry.fromPointXY(QgsPointXY(x, y))
+        if layer_ids:
+            targets = [project.mapLayer(lid) for lid in layer_ids]
+        else:
+            targets = [n.layer() for n in project.layerTreeRoot().findLayers() if n.isVisible()]
+        prefilter = QgsRectangle(x - tolerance, y - tolerance, x + tolerance, y + tolerance)
+        results = []
+        for layer in targets:
+            if layer is None or layer.type() != LAYER_VECTOR:
+                continue
+            req = QgsFeatureRequest().setFilterRect(prefilter)
+            feats = []
+            for feat in layer.getFeatures(req):
+                geom = feat.geometry()
+                if geom.isEmpty():
+                    continue
+                if tolerance > 0:
+                    if geom.distance(pt_geom) > tolerance:
+                        continue
+                elif not geom.intersects(pt_geom):
+                    continue
+                attrs = {f.name(): self._convert_attribute(feat[f.name()]) for f in layer.fields()}
+                attrs["_fid"] = feat.id()
+                feats.append(attrs)
+                if len(feats) >= limit:
+                    break
+            if feats:
+                results.append(
+                    {"layer_id": layer.id(), "name": layer.name(), "features": feats, "count": len(feats)}
+                )
+        return {"point": [x, y], "results": results}
+
+    def execute_sql(
+        self, query, layers=None, as_layer=False, layer_name="sql_result",
+        geometry_field=None, uid_field=None, **kwargs,
+    ):
+        """Run SQL across loaded layers via a virtual layer. Reference layers by id."""
+        from qgis.core import QgsVirtualLayerDefinition
+
+        project = QgsProject.instance()
+        definition = QgsVirtualLayerDefinition()
+        src_ids = layers or list(project.mapLayers().keys())
+        for lid in src_ids:
+            lyr = project.mapLayer(lid)
+            if lyr is None:
+                raise Exception(f"Layer not found: {lid}")
+            definition.addSource(lyr.name(), lid)
+        definition.setQuery(query)
+        if geometry_field:
+            definition.setGeometryField(geometry_field)
+        else:
+            definition.setGeometryWkbType(QgsWkbTypes.NoGeometry)
+        if uid_field:
+            definition.setUid(uid_field)
+        vlayer = QgsVectorLayer(definition.toString(), layer_name, "virtual")
+        if not vlayer.isValid():
+            raise Exception(f"Invalid SQL/virtual layer for query: {query}")
+        if as_layer:
+            project.addMapLayer(vlayer)
+            return {"output_layer_id": vlayer.id(), "name": vlayer.name(), "feature_count": vlayer.featureCount()}
+        fields = [f.name() for f in vlayer.fields()]
+        rows = []
+        for i, feat in enumerate(vlayer.getFeatures()):
+            if i >= 1000:
+                break
+            rows.append({fn: self._convert_attribute(feat[fn]) for fn in fields})
+        return {"fields": fields, "rows": rows, "count": len(rows)}
+
+    def get_unique_values(self, layer_id, field, limit=1000, **kwargs):
+        """Return distinct values of a field (limit -1 for all)."""
+        layer = self._get_vector_layer(layer_id)
+        idx = layer.fields().indexOf(field)
+        if idx < 0:
+            raise Exception(f"Field not found: {field}")
+        raw = layer.uniqueValues(idx, limit)
+        values = [self._convert_attribute(v) for v in raw if v is not None and str(v) != "NULL"]
+        with contextlib.suppress(TypeError):
+            values = sorted(values, key=lambda x: (str(type(x)), x))
+        return {"field": field, "values": values, "count": len(values)}
+
+    def field_calculator(
+        self, layer_id, field_name, expression, field_type="double", length=0, precision=0, **kwargs,
+    ):
+        """Add (if missing) and populate a field from a QGIS expression, in-place."""
+        layer = self._get_vector_layer(layer_id)
+        type_map = {
+            "string": QVariant.String,
+            "int": QVariant.Int,
+            "double": QVariant.Double,
+            "bool": QVariant.Bool,
+            "date": QVariant.Date,
+            "datetime": QVariant.DateTime,
+        }
+        idx = layer.fields().indexOf(field_name)
+        created = False
+        if idx < 0:
+            v_type = type_map.get(field_type.lower(), QVariant.Double)
+            layer.dataProvider().addAttributes([QgsField(field_name, v_type, field_type, length, precision)])
+            layer.updateFields()
+            idx = layer.fields().indexOf(field_name)
+            created = True
+
+        expr = QgsExpression(expression)
+        if expr.hasParserError():
+            raise Exception(f"Expression parse error: {expr.parserErrorString()}")
+        ctx = QgsExpressionContext()
+        ctx.appendScopes(QgsExpressionContextUtils.globalProjectLayerScopes(layer))
+        expr.prepare(ctx)
+
+        if not layer.startEditing():
+            raise Exception("Could not start editing layer")
+        updated = 0
+        for feat in layer.getFeatures():
+            ctx.setFeature(feat)
+            val = expr.evaluate(ctx)
+            if expr.hasEvalError():
+                continue
+            layer.changeAttributeValue(feat.id(), idx, val)
+            updated += 1
+        if not layer.commitChanges():
+            errs = "; ".join(layer.commitErrors())
+            raise Exception(f"Commit failed: {errs}")
+        return {"ok": True, "field_name": field_name, "created": created, "updated": updated}
+
+    def export_layer(self, layer_id, output_path, target_crs=None, filter_expression=None, **kwargs):
+        """Export a vector/raster layer to disk. target_crs reprojects; format by extension."""
+        import processing
+
+        project = QgsProject.instance()
+        if layer_id not in project.mapLayers():
+            raise Exception(f"Layer not found: {layer_id}")
+        layer = project.mapLayer(layer_id)
+
+        if layer.type() == LAYER_VECTOR:
+            src = layer
+            if filter_expression:
+                r = processing.run(
+                    "native:extractbyexpression",
+                    {"INPUT": layer, "EXPRESSION": filter_expression, "OUTPUT": "memory:"},
+                )
+                src = r["OUTPUT"]
+            if target_crs:
+                processing.run(
+                    "native:reprojectlayer", {"INPUT": src, "TARGET_CRS": target_crs, "OUTPUT": output_path}
+                )
+            else:
+                processing.run("native:savefeatures", {"INPUT": src, "OUTPUT": output_path})
+            return {"ok": True, "output": output_path}
+
+        if layer.type() == LAYER_RASTER:
+            if target_crs:
+                processing.run(
+                    "gdal:warpreproject", {"INPUT": layer, "TARGET_CRS": target_crs, "OUTPUT": output_path}
+                )
+            else:
+                processing.run("gdal:translate", {"INPUT": layer, "OUTPUT": output_path})
+            return {"ok": True, "output": output_path}
+
+        raise Exception(f"Unsupported layer type for export: {layer_id}")
+
+    def _resolve_raster_layer(self, layer_id):
+        """Helper: get a raster layer by id or raise."""
+        project = QgsProject.instance()
+        if layer_id not in project.mapLayers():
+            raise Exception(f"Layer not found: {layer_id}")
+        layer = project.mapLayer(layer_id)
+        if layer.type() != LAYER_RASTER:
+            raise Exception(f"Not a raster layer: {layer_id}")
+        return layer
+
+    def _register_output(self, out, default_name):
+        """Helper: add a processing output layer to the project, or report a file path."""
+        if isinstance(out, str):
+            return {"output": out}
+        out.setName(default_name)
+        QgsProject.instance().addMapLayer(out)
+        return {"output_layer_id": out.id(), "name": out.name()}
+
+    def raster_calculator(self, expression, output_path, reference_layer=None, **kwargs):
+        """Band math via QgsRasterCalculator. Reference loaded rasters as 'name@band'."""
+        from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
+
+        project = QgsProject.instance()
+        entries = []
+        ref = None
+        rasters = []
+        for lid, layer in project.mapLayers().items():
+            if layer.type() != LAYER_RASTER:
+                continue
+            rasters.append(layer)
+            for band in range(1, layer.bandCount() + 1):
+                e = QgsRasterCalculatorEntry()
+                e.ref = f"{layer.name()}@{band}"
+                e.raster = layer
+                e.bandNumber = band
+                entries.append(e)
+            if reference_layer and reference_layer in (lid, layer.name()):
+                ref = layer
+        if ref is None:
+            if not rasters:
+                raise Exception("No raster layers loaded to compute from")
+            ref = rasters[0]
+
+        extent = ref.extent()
+        cols = ref.width()
+        rows = ref.height()
+        try:
+            calc = QgsRasterCalculator(
+                expression, output_path, "GTiff", extent, cols, rows, entries, project.transformContext()
+            )
+        except TypeError:
+            calc = QgsRasterCalculator(expression, output_path, "GTiff", extent, cols, rows, entries)
+        res = calc.processCalculation()
+        if int(res) != 0:
+            raise Exception(f"Raster calculation failed (code {int(res)})")
+        return {"ok": True, "output": output_path, "reference_layer": ref.name()}
+
+    def zonal_statistics(
+        self, polygon_layer, raster_layer, band=1, prefix="_", stats=None, output_path=None, **kwargs,
+    ):
+        """Per-polygon raster statistics (native:zonalstatisticsfb).
+
+        stats: list of int codes (0=count,1=sum,2=mean,3=median,4=stdev,5=min,
+        6=max,7=range,8=minority,9=majority,10=variety,11=variance).
+        """
+        import processing
+
+        poly = self._get_vector_layer(polygon_layer)
+        rast = self._resolve_raster_layer(raster_layer)
+        params = {
+            "INPUT": poly,
+            "INPUT_RASTER": rast,
+            "RASTER_BAND": band,
+            "COLUMN_PREFIX": prefix,
+            "STATISTICS": stats or [0, 1, 2],
+            "OUTPUT": output_path or "memory:zonal_stats",
+        }
+        r = processing.run("native:zonalstatisticsfb", params)
+        return self._register_output(r["OUTPUT"], "zonal_stats")
+
+    def sample_raster_values(self, raster_layer, points, band=None, **kwargs):
+        """Sample raster values at points [[x, y], ...] in the raster's CRS."""
+        layer = self._resolve_raster_layer(raster_layer)
+        dp = layer.dataProvider()
+        results = []
+        for pt in points:
+            p = QgsPointXY(pt[0], pt[1])
+            if band:
+                val, ok = dp.sample(p, band)
+                results.append({"x": pt[0], "y": pt[1], "band": band, "value": val if ok else None})
+            else:
+                vals = {}
+                for b in range(1, layer.bandCount() + 1):
+                    v, ok = dp.sample(p, b)
+                    vals[b] = v if ok else None
+                results.append({"x": pt[0], "y": pt[1], "values": vals})
+        return {"samples": results, "count": len(results)}
+
+    def spatial_join(
+        self, target_layer, join_layer, predicates=None, join_fields=None,
+        method=1, prefix="", output_path=None, **kwargs,
+    ):
+        """Join attributes by location (native:joinattributesbylocation).
+
+        predicates: list of int (0=intersects,1=contains,2=equals,3=touches,
+        4=overlaps,5=within,6=crosses). method: 0=one-to-many, 1=first match,
+        2=largest overlap.
+        """
+        import processing
+
+        target = self._get_vector_layer(target_layer)
+        join = self._get_vector_layer(join_layer)
+        params = {
+            "INPUT": target,
+            "JOIN": join,
+            "PREDICATE": predicates or [0],
+            "JOIN_FIELDS": join_fields or [],
+            "METHOD": method,
+            "PREFIX": prefix,
+            "OUTPUT": output_path or "memory:joined",
+        }
+        r = processing.run("native:joinattributesbylocation", params)
+        return self._register_output(r["OUTPUT"], "joined")
+
+    def list_processing_models(self, **kwargs):
+        """List registered Processing models (provider 'model')."""
+        registry = QgsApplication.processingRegistry()
+        models = []
+        for alg in registry.algorithms():
+            if alg.provider().id() == "model":
+                models.append({"id": alg.id(), "name": alg.displayName(), "group": alg.group()})
+        return {"models": models, "count": len(models)}
+
+    def run_model(self, model, parameters=None, **kwargs):
+        """Run a Processing model by registered id or by .model3 file path."""
+        import processing
+        from qgis.core import QgsProcessingModelAlgorithm
+
+        parameters = parameters or {}
+        if isinstance(model, str) and model.lower().endswith(".model3"):
+            alg = QgsProcessingModelAlgorithm()
+            if not alg.fromFile(model):
+                raise Exception(f"Failed to load model file: {model}")
+            alg.initAlgorithm()
+            target = alg
+        else:
+            target = model
+        result = processing.run(target, parameters)
+        return {"model": model, "result": {k: str(v) for k, v in result.items()}}
+
+    def get_processing_providers(self, **kwargs):
+        """List Processing providers with algorithm counts and active status."""
+        registry = QgsApplication.processingRegistry()
+        providers = []
+        for p in registry.providers():
+            info = {"id": p.id(), "name": p.name(), "algorithm_count": len(p.algorithms())}
+            with contextlib.suppress(Exception):
+                info["active"] = bool(p.isActive())
+            providers.append(info)
+        return {"providers": providers, "count": len(providers)}
+
+    def execute_processing_batch(self, algorithm, parameters_list, **kwargs):
+        """Run the same algorithm once per parameter dict; collect per-run results."""
+        import processing
+
+        results = []
+        for i, params in enumerate(parameters_list):
+            try:
+                r = processing.run(algorithm, params)
+                results.append({"index": i, "status": "success", "result": {k: str(v) for k, v in r.items()}})
+            except Exception as e:
+                results.append({"index": i, "status": "error", "message": str(e)})
+        return {"algorithm": algorithm, "results": results, "count": len(results)}
+
+    def _get_layout(self, layout_name):
+        """Helper: get a print layout by name or raise."""
+        layout = QgsProject.instance().layoutManager().layoutByName(layout_name)
+        if not layout:
+            raise Exception(f"Layout not found: {layout_name}")
+        return layout
+
+    def _find_layout_map(self, layout, map_item_id=None):
+        """Helper: find a map item in a layout by id/uuid, else the first map item."""
+        maps = [it for it in layout.items() if isinstance(it, QgsLayoutItemMap)]
+        if not maps:
+            return None
+        if map_item_id:
+            for m in maps:
+                if m.id() == map_item_id or m.uuid() == map_item_id:
+                    return m
+        return maps[0]
+
+    def get_layout_info(self, layout_name, **kwargs):
+        """List items in a print layout (type, id, position, size)."""
+        layout = self._get_layout(layout_name)
+        items = []
+        for item in layout.items():
+            if not hasattr(item, "uuid"):
+                continue
+            try:
+                pos = item.positionWithUnits()
+                size = item.sizeWithUnits()
+                x, y = pos.x(), pos.y()
+                w, h = size.width(), size.height()
+            except Exception:
+                x = y = w = h = None
+            items.append(
+                {"id": item.id(), "uuid": item.uuid(), "type": type(item).__name__, "x": x, "y": y, "width": w, "height": h}
+            )
+        return {
+            "layout": layout_name,
+            "items": items,
+            "count": len(items),
+            "page_count": layout.pageCollection().pageCount(),
+        }
+
+    def remove_layout(self, layout_name, **kwargs):
+        """Remove a print layout from the project."""
+        manager = QgsProject.instance().layoutManager()
+        layout = self._get_layout(layout_name)
+        manager.removeLayout(layout)
+        return {"ok": True, "removed": layout_name}
+
+    def add_layout_legend(
+        self, layout_name, map_item_id=None, x=10, y=10, width=80, height=100, title="Legend", **kwargs,
+    ):
+        """Add a legend to a print layout, linked to a map item."""
+        from qgis.core import QgsLayoutItemLegend
+
+        layout = self._get_layout(layout_name)
+        legend = QgsLayoutItemLegend(layout)
+        legend.setTitle(title)
+        map_item = self._find_layout_map(layout, map_item_id)
+        if map_item:
+            legend.setLinkedMap(map_item)
+        layout.addLayoutItem(legend)
+        legend.attemptMove(QgsLayoutPoint(x, y))
+        legend.attemptResize(QgsLayoutSize(width, height))
+        return {"ok": True, "uuid": legend.uuid()}
+
+    def add_layout_scalebar(
+        self, layout_name, map_item_id=None, x=10, y=180, width=80, height=20, style="Single Box", **kwargs,
+    ):
+        """Add a scale bar to a print layout, linked to a map item."""
+        from qgis.core import QgsLayoutItemScaleBar
+
+        layout = self._get_layout(layout_name)
+        bar = QgsLayoutItemScaleBar(layout)
+        bar.setStyle(style)
+        map_item = self._find_layout_map(layout, map_item_id)
+        if map_item:
+            bar.setLinkedMap(map_item)
+        bar.applyDefaultSize()
+        layout.addLayoutItem(bar)
+        bar.attemptMove(QgsLayoutPoint(x, y))
+        return {"ok": True, "uuid": bar.uuid()}
+
+    def add_layout_label(
+        self, layout_name, text, x=10, y=10, width=100, height=20, font_size=12, color="#000000", **kwargs,
+    ):
+        """Add a text label to a print layout. Supports [% expression %] in text."""
+        from qgis.core import QgsLayoutItemLabel
+
+        layout = self._get_layout(layout_name)
+        label = QgsLayoutItemLabel(layout)
+        label.setText(text)
+        label.setFontColor(QColor(color))
+        font = label.font()
+        font.setPointSize(int(font_size))
+        label.setFont(font)
+        layout.addLayoutItem(label)
+        label.attemptMove(QgsLayoutPoint(x, y))
+        label.attemptResize(QgsLayoutSize(width, height))
+        return {"ok": True, "uuid": label.uuid()}
+
+    def add_layout_picture(self, layout_name, path, x=10, y=10, width=30, height=30, **kwargs):
+        """Add a picture/SVG (logo, north arrow) to a print layout."""
+        from qgis.core import QgsLayoutItemPicture
+
+        layout = self._get_layout(layout_name)
+        pic = QgsLayoutItemPicture(layout)
+        pic.setPicturePath(path)
+        layout.addLayoutItem(pic)
+        pic.attemptMove(QgsLayoutPoint(x, y))
+        pic.attemptResize(QgsLayoutSize(width, height))
+        return {"ok": True, "uuid": pic.uuid()}
+
+    def add_layout_table(
+        self, layout_name, layer_id, x=10, y=10, width=180, height=80, max_rows=20, **kwargs,
+    ):
+        """Add an attribute table for a vector layer to a print layout."""
+        from qgis.core import QgsLayoutFrame, QgsLayoutItemAttributeTable
+
+        layer = self._get_vector_layer(layer_id)
+        layout = self._get_layout(layout_name)
+        table = QgsLayoutItemAttributeTable.create(layout)
+        table.setVectorLayer(layer)
+        table.setMaximumNumberOfFeatures(int(max_rows))
+        layout.addMultiFrame(table)
+        frame = QgsLayoutFrame(layout, table)
+        frame.attemptMove(QgsLayoutPoint(x, y))
+        frame.attemptResize(QgsLayoutSize(width, height))
+        table.addFrame(frame)
+        return {"ok": True, "uuid": frame.uuid()}
+
+    def configure_atlas(
+        self, layout_name, coverage_layer, enabled=True,
+        page_name_expression=None, filter_expression=None, sort_expression=None, **kwargs,
+    ):
+        """Configure the atlas of a print layout (coverage layer, filter, sort)."""
+        layer = self._get_vector_layer(coverage_layer)
+        layout = self._get_layout(layout_name)
+        atlas = layout.atlas()
+        atlas.setEnabled(bool(enabled))
+        atlas.setCoverageLayer(layer)
+        if page_name_expression:
+            atlas.setPageNameExpression(page_name_expression)
+        if filter_expression:
+            atlas.setFilterFeatures(True)
+            atlas.setFilterExpression(filter_expression)
+        if sort_expression:
+            atlas.setSortFeatures(True)
+            atlas.setSortExpression(sort_expression)
+        atlas.updateFeatures()
+        return {"ok": True, "coverage_layer": layer.name(), "enabled": bool(enabled), "count": atlas.count()}
+
+    def export_atlas(self, layout_name, output_path, format="pdf", dpi=300, **kwargs):
+        """Export an atlas: single multi-page PDF, or one image file per feature."""
+        layout = self._get_layout(layout_name)
+        atlas = layout.atlas()
+        if not atlas.enabled():
+            raise Exception("Atlas not enabled; call configure_atlas first")
+        atlas.updateFeatures()
+        fmt = format.lower()
+        if fmt == "pdf":
+            settings = QgsLayoutExporter.PdfExportSettings()
+            settings.dpi = dpi
+            result, error = QgsLayoutExporter.exportToPdf(atlas, output_path, settings)
+        elif fmt in ("png", "jpg", "jpeg", "tif", "tiff"):
+            os.makedirs(output_path, exist_ok=True)
+            settings = QgsLayoutExporter.ImageExportSettings()
+            settings.dpi = dpi
+            base = os.path.join(output_path, layout_name)
+            result, error = QgsLayoutExporter.exportToImage(atlas, base, fmt, settings)
+        else:
+            raise Exception(f"Unsupported atlas format: {format}")
+        if result != LAYOUT_SUCCESS:
+            raise Exception(f"Atlas export failed: {error}")
+        return {"ok": True, "output": output_path, "count": atlas.count()}
 
 
 class MCPConfiguratorDialog(QDialog):
