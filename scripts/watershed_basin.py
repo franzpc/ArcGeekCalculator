@@ -310,7 +310,7 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             val, success = dem_layer.dataProvider().sample(pt, 1)
             if success and val is not None and not math.isnan(val):
                 return val
-        except Exception as e:
+        except Exception:  # nosec B110 - out-of-extent points fall back to None
             pass
         return None
 

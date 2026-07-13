@@ -324,7 +324,7 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             try:
                 import shutil
                 shutil.rmtree(temp_dir)
-            except:
+            except OSError:  # nosec B110 - best-effort temp cleanup, file may still be locked
                 pass
                 
             return result

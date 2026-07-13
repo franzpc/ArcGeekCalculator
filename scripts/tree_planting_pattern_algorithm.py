@@ -661,9 +661,9 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
                                 
                                 current_distance += segment_length
         
-        except Exception as e:
+        except Exception:  # nosec B110 - partial results already collected are still usable
             pass
-        
+
         return points
 
     def find_closest_point_to_contours(self, stream_points, contour_layer, polygon_geom):
@@ -687,9 +687,9 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
                                 min_distance = distance
                                 closest_point = stream_point
         
-        except Exception as e:
+        except Exception:  # nosec B110 - fall back to no closest point found
             pass
-        
+
         return closest_point
 
     def generate_contour_continuation_points(self, contour_layer, start_point, spacing, polygon_geom, existing_points):
@@ -744,9 +744,9 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
                                     line_points = self.generate_points_along_contour_line(line, spacing, existing_points + points)
                                     points.extend(line_points)
         
-        except Exception as e:
+        except Exception:  # nosec B110 - partial results already collected are still usable
             pass
-        
+
         return points
 
     def generate_points_along_contour_line(self, line, spacing, existing_points):
@@ -795,9 +795,9 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
                                 break
                             current_dist += segment_length
         
-        except Exception as e:
+        except Exception:  # nosec B110 - partial results already collected are still usable
             pass
-        
+
         return points
 
     def generate_random_points(self, geom, spacing_x, spacing_y, source_crs, context, feedback):

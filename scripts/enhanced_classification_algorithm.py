@@ -691,8 +691,8 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
         try:
             feedback.pushInfo(f"   🔬 Cohen's Kappa: {kappa:.4f} ({kappa_interp})")
             feedback.pushInfo(f"   ⚖️ Balanced Accuracy: {balanced_acc:.4f}")
-        except:
-            pass
+        except (NameError, TypeError, ValueError) as e:  # nosec B110 - optional metrics, safe to skip
+            feedback.pushInfo(f"   (skipped optional metrics: {e})")
         feedback.pushInfo(f"   📊 Classes: {len(classes)}")
         feedback.pushInfo(f"   📈 Training samples: {len(feature_list)}")
         feedback.pushInfo(f"   🎛️ Spectral bands: {num_bands}")

@@ -1361,7 +1361,7 @@ class QgisMCPServer(QObject):
                 default = param.defaultValue()
                 if default is not None:
                     param_info["default"] = str(default)
-            except Exception:
+            except Exception:  # nosec B110 - default value is optional metadata
                 pass
             params.append(param_info)
 

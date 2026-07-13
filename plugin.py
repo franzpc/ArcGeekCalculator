@@ -120,7 +120,7 @@ class ArcGeekCalculator:
 
         try:
             self.iface.layerTreeView().contextMenuAboutToShow.disconnect(self.add_layer_menu_items)
-        except:
+        except (TypeError, RuntimeError):  # nosec B110 - signal not yet connected on first load
             pass
 
         if version >= 30000:
@@ -181,12 +181,12 @@ class ArcGeekCalculator:
 
         try:
             self.iface.layerTreeView().contextMenuAboutToShow.disconnect(self.add_layer_menu_items)
-        except:
+        except (TypeError, RuntimeError):  # nosec B110 - signal may already be disconnected on unload
             pass
 
         try:
             self.iface.mapCanvas().contextMenuAboutToShow.disconnect(self.add_map_menu_items)
-        except:
+        except (TypeError, RuntimeError):  # nosec B110 - signal may already be disconnected on unload
             pass
 
     def add_layer_menu_items(self, menu):
