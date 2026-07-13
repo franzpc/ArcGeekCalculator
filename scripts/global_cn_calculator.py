@@ -173,12 +173,10 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
 
     def process_landcover(self, aoi, vrt_path, parameters, context, feedback):
         extent = aoi.extent()
-        extent_str = f"{extent.xMinimum()},{extent.xMaximum()},{extent.yMinimum()},{extent.yMaximum()} [EPSG:4326]"
-        
-        output = parameters.get(self.OUTPUT_LANDCOVER, QgsProcessing.TEMPORARY_OUTPUT)
-        
-        out_path = output if output != QgsProcessing.TEMPORARY_OUTPUT else \
-            os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'landcover.tif')
+
+        out_path = self.parameterAsOutputLayer(parameters, self.OUTPUT_LANDCOVER, context)
+        if not out_path:
+            out_path = os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'landcover.tif')
         gdal.UseExceptions()
         gdal.Translate(out_path, vrt_path,
                        projWin=[extent.xMinimum(), extent.yMaximum(),
@@ -283,10 +281,7 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
                 gdal.Translate(merged_file, vrt_file, options=translate_options)
             
             feedback.pushInfo('Clipping HYSOG data to study area...')
-            output = parameters.get(self.OUTPUT_SOIL, QgsProcessing.TEMPORARY_OUTPUT)
-            
-            extent_str = f"{min_lon},{max_lon},{min_lat},{max_lat} [EPSG:4326]"
-            
+
             _clipped_path = os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'hysog_clipped.tif')
             gdal.Translate(_clipped_path, merged_file,
                            projWin=[min_lon, max_lat, max_lon, min_lat],
@@ -308,12 +303,14 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             filled_temp = _fill_output
             
             import numpy as np
-            output = parameters.get(self.OUTPUT_SOIL, QgsProcessing.TEMPORARY_OUTPUT)
-            _soil_out = output if output != QgsProcessing.TEMPORARY_OUTPUT else \
-                os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'soil.tif')
+            _soil_out = self.parameterAsOutputLayer(parameters, self.OUTPUT_SOIL, context)
+            if not _soil_out:
+                _soil_out = os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'soil.tif')
             _src2 = gdal.Open(filled_temp)
             A = _src2.GetRasterBand(1).ReadAsArray().astype(np.float32)
-            _soil_arr = np.where((A == 255) | (A == 13) | (A == 14) | (A > 4), 3, A).astype(np.uint8)
+            # Dual HSG codes 11-14 (A/D, B/D, C/D, D/D) default to D per NRCS NEH-630 Ch.7 (undrained condition)
+            _soil_arr = np.where((A >= 11) & (A <= 14), 4,
+                         np.where((A == 255) | (A > 4), 3, A)).astype(np.uint8)
             _drv2 = gdal.GetDriverByName('GTiff')
             _dst2 = _drv2.Create(_soil_out, _src2.RasterXSize, _src2.RasterYSize, 1, gdal.GDT_Byte)
             _dst2.SetGeoTransform(_src2.GetGeoTransform())
