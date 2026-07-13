@@ -139,7 +139,7 @@ ArcGeek - Franz Pucha-Cofrep
 **4.1.7**:
 - Optimized Parcel Division improved: better lot orientation, optional street frontage lines, two rows of lots per block, and division by target lot area
 - MCP Server: added 25 new commands to close the gap with nkarasiak/qgis-mcp — spatial analysis, cross-layer SQL, processing models, layer duplicate/order/export, and layout & atlas authoring
-- Global CN: fixed swapped ARC I/II lookup tables, an output path bug, dual hydrologic soil group handling (now defaults to D per NRCS guidance), and mangrove CN value (GitHub issue #18)
+- Global CN: fixed swapped ARC I/II lookup tables, an output path bug, dual hydrologic soil group handling (now defaults to D per NRCS guidance), and mangrove CN value (GitHub issue #18, reported by @drkenny-git and @D-Trujillo32)
 
 **4.1.6**:
 - MCP Server updated to 51 tools (powered by nkarasiak/qgis-mcp) with backward compatibility for existing configurations

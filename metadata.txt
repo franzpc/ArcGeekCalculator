@@ -16,7 +16,7 @@ about=Developed by Franz Pucha-Cofrep, 2024-2026. ArcGeek Calculator provides a 
 ## Changes in Version 4.1.7:
     - Optimized Parcel Division: better lot orientation, optional street frontage lines, two rows per block, division by target area
     - MCP Server: 25 new commands for parity with nkarasiak/qgis-mcp v0.5.0
-    - Global CN: fixed swapped ARC I/II lookup tables, output path bug, dual hydrologic soil group handling, and mangrove CN value (issue #18)
+    - Global CN: fixed swapped ARC I/II lookup tables, output path bug, dual hydrologic soil group handling, and mangrove CN value (issue #18, reported by @drkenny-git and @D-Trujillo32)
 
 ## Changes in Version 4.1.6:
     - MCP Server updated to 51 tools with backward compatibility for existing configurations
