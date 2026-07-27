@@ -49,6 +49,23 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
+    @staticmethod
+    def round_or_null(value, precision):
+        """Round a morphometric value, writing NULL when it is undefined.
+
+        Several parameters are legitimately undefined for some basins (e.g. the
+        bifurcation ratio when the network has a single Strahler order, or the
+        times of concentration when the channel slope cannot be derived).
+        """
+        if value is None:
+            return None
+        try:
+            if math.isnan(value) or math.isinf(value):
+                return None
+            return round(value, precision)
+        except TypeError:
+            return None
+
     def processAlgorithm(self, parameters, context, feedback):
         try:
             basin_layer = self.parameterAsVectorLayer(parameters, self.INPUT_BASIN, context)
@@ -119,7 +136,7 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
                 feature.setFields(fields)
                 feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(pour_point)))
                 feature.setAttribute("Parameter", param)
-                feature.setAttribute("Value", round(details['value'], precision))
+                feature.setAttribute("Value", self.round_or_null(details['value'], precision))
                 feature.setAttribute("Unit", details['unit'])
                 feature.setAttribute("Interpretation", details['interpretation'])
                 sink.addFeature(feature, QgsFeatureSink.FastInsert)
@@ -132,7 +149,7 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
                 hi_feature.setFields(fields)
                 hi_feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(pour_point)))
                 hi_feature.setAttribute("Parameter", "Hypsometric Integral (HI)")
-                hi_feature.setAttribute("Value", round(hypsometric_results['HI'], precision))
+                hi_feature.setAttribute("Value", self.round_or_null(hypsometric_results['HI'], precision))
                 hi_feature.setAttribute("Unit", "dimensionless")
                 hi_feature.setAttribute("Interpretation", hypsometric_results['STAGE'])
                 sink.addFeature(hi_feature, QgsFeatureSink.FastInsert)

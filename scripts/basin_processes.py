@@ -53,15 +53,14 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
         mean_elevation = dem_stats.mean 
     except Exception as e:
         feedback.reportError(f"Error calculating DEM statistics: {str(e)}")
-        max_elevation = min_elevation = relief = None
+        max_elevation = min_elevation = relief = mean_elevation = None
 
     mean_stream_length = total_stream_length / total_stream_number if total_stream_number != 0 else None
     stream_frequency = total_stream_number / basin_area if basin_area > 0 else 0
     drainage_intensity = stream_frequency / drainage_density if drainage_density != 0 else None
     length_of_overland_flow = 1 / (2 * drainage_density) if drainage_density != 0 else None
 
-    # mean_elevation = (max_elevation + min_elevation) / 2 if max_elevation is not None and min_elevation is not None else None
-    mean_elevation = dem_stats.mean
+    # mean_elevation is taken from the DEM band statistics above, not from (max + min) / 2
     mean_slope_radians = math.radians(mean_slope_degrees)
     mean_slope_m_per_m = math.tan(mean_slope_radians)
     mean_slope_percent = math.tan(math.radians(mean_slope_degrees)) * 100
@@ -130,13 +129,13 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
 
     time_of_concentration_kirpich = (0.0195 * ((main_channel_length * 1000) ** 0.77) / (slope_s ** 0.385)) / 60 if slope_s and slope_s > 0 else None
     # time_of_concentration_kerby = (0.828 * (basin_length * 1000) ** 0.467 / (slope_s ** 0.235)) / 60 if slope_s and slope_s > 0 else None
-    time_of_concentration_giandotti = ((4 * math.sqrt(basin_area) + 1.5 * main_channel_length) / (0.8 * math.sqrt(relief))) if relief > 0 else None
+    time_of_concentration_giandotti = ((4 * math.sqrt(basin_area) + 1.5 * main_channel_length) / (0.8 * math.sqrt(relief))) if relief is not None and relief > 0 else None
     time_of_concentration_temez = 0.3 * (main_channel_length / (slope_s ** 0.25)) ** 0.76 if slope_s and slope_s > 0 else None
     time_of_concentration_usda = (3.3 * basin_length) / math.sqrt(mean_slope_percent) if mean_slope_percent > 0 else None
     time_of_concentration_ventura_heras = middle_distance * (basin_area ** 0.5 / slope_percent) if slope_percent and slope_percent > 0 else None
     time_of_concentration_passini = middle_distance * ((basin_area * main_channel_length) ** (1/3)) / (slope_percent ** 0.5) if slope_percent and slope_percent > 0 else None
 
-    time_of_concentration_california_culverts = (0.0195 * ((main_channel_length * 1000) ** 3 / relief) ** 0.385) / 60 if relief > 0 else None
+    time_of_concentration_california_culverts = (0.0195 * ((main_channel_length * 1000) ** 3 / relief) ** 0.385) / 60 if relief is not None and relief > 0 else None
     time_of_concentration_bransby_williams = 0.243 * (main_channel_length / (basin_area ** 0.1 * (slope_s * 1000) ** 0.2)) if slope_s and slope_s > 0 else None
     time_of_concentration_johnstone_cross = 2.6 * (main_channel_length / (slope_s * 1000) ** 0.5) ** 0.5 if slope_s and slope_s > 0 else None
     time_of_concentration_clark = 0.335 * (basin_area / (slope_s * 1000) ** 0.5) ** 0.593 if slope_s and slope_s > 0 else None
@@ -146,7 +145,7 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
     elongation_ratio = (2 * math.sqrt(basin_area / math.pi)) / basin_length
     circularity_ratio = (4 * math.pi * basin_area) / (perimeter ** 2)
     compactness_coefficient = 0.2821 * perimeter / math.sqrt(basin_area)
-    ruggedness_number = drainage_density * relief / 1000  # Convert relief to km
+    ruggedness_number = drainage_density * relief / 1000 if relief is not None else None  # Convert relief to km
     infiltration_number = drainage_density * stream_frequency
     drainage_texture = total_stream_number / perimeter
     fitness_ratio = main_channel_length / perimeter
@@ -165,10 +164,10 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
     else:
         main_channel_sinuosity = None
 
-    massivity_index = mean_elevation / basin_area
+    massivity_index = mean_elevation / basin_area if mean_elevation is not None and basin_area > 0 else None
     # Junction count in a tree network ≈ total segments − 1
     junction_density = (total_stream_number - 1) / basin_area if total_stream_number > 1 else 0
-    storage_coefficient = 0.3025 * (basin_length ** 2) / relief  # simplified formula
+    storage_coefficient = 0.3025 * (basin_length ** 2) / relief if relief else None  # simplified formula
 
     return {
         # --- Basin Geometry ---
@@ -345,7 +344,7 @@ def calculate_orographic_coefficient(mean_elevation, basin_area):
     Hm = mean elevation (m), A = basin area (km²).
     Equivalent to Hm(km) × A(km²).
     """
-    if not basin_area or basin_area == 0:
+    if mean_elevation is None or not basin_area or basin_area == 0:
         return None
     return (mean_elevation * basin_area) / 1000
 
@@ -561,7 +560,9 @@ def get_compactness_coefficient_interpretation(compactness_coefficient):
         return "Rectangular-oblong shape"
 
 def get_length_of_overland_flow_interpretation(length_of_overland_flow):
-    if length_of_overland_flow < 0.25:
+    if length_of_overland_flow is None:
+        return "Unable to calculate length of overland flow"
+    elif length_of_overland_flow < 0.25:
         return "Short overland flow length, indicating high drainage density"
     elif 0.25 <= length_of_overland_flow < 0.5:
         return "Moderate overland flow length"
@@ -569,7 +570,9 @@ def get_length_of_overland_flow_interpretation(length_of_overland_flow):
         return "Long overland flow length, indicating low drainage density"
 
 def get_constant_channel_maintenance_interpretation(constant_channel_maintenance):
-    if constant_channel_maintenance < 0.5:
+    if constant_channel_maintenance is None:
+        return "Unable to calculate constant of channel maintenance"
+    elif constant_channel_maintenance < 0.5:
         return "Low constant of channel maintenance, indicating high drainage density"
     elif 0.5 <= constant_channel_maintenance < 1:
         return "Moderate constant of channel maintenance"
@@ -577,7 +580,9 @@ def get_constant_channel_maintenance_interpretation(constant_channel_maintenance
         return "High constant of channel maintenance, indicating low drainage density"
 
 def get_ruggedness_number_interpretation(ruggedness_number):
-    if ruggedness_number < 0.1:
+    if ruggedness_number is None:
+        return "Unable to calculate ruggedness number"
+    elif ruggedness_number < 0.1:
         return "Extremely low ruggedness"
     elif 0.1 <= ruggedness_number < 0.5:
         return "Low ruggedness"
@@ -624,7 +629,9 @@ def get_drainage_intensity_interpretation(drainage_intensity):
         return "Very high drainage intensity"
 
 def get_relief_interpretation(relief):
-    if relief < 100:
+    if relief is None:
+        return "Unable to calculate relief"
+    elif relief < 100:
         return "Low relief, indicating flat terrain"
     elif 100 <= relief < 300:
         return "Moderate relief"
@@ -662,7 +669,9 @@ def get_fitness_ratio_interpretation(fitness_ratio):
         return "High fitness ratio, indicating efficient drainage network"
 
 def get_asymmetry_factor_interpretation(asymmetry_factor):
-    if asymmetry_factor < 45:
+    if asymmetry_factor is None:
+        return "Unable to calculate asymmetry factor"
+    elif asymmetry_factor < 45:
         return "Significant tilt to the right (looking downstream)"
     elif 45 <= asymmetry_factor < 55:
         return "Relatively symmetric basin"
@@ -733,7 +742,9 @@ def get_main_channel_sinuosity_interpretation(sinuosity):
         return "Meandering channel"
 
 def get_massivity_index_interpretation(massivity_index):
-    if massivity_index < 50:
+    if massivity_index is None:
+        return "Unable to calculate massivity index"
+    elif massivity_index < 50:
         return "Low massivity, indicating relatively flat terrain"
     elif 50 <= massivity_index < 100:
         return "Moderate massivity"
@@ -757,7 +768,9 @@ def get_junction_density_interpretation(junction_density):
         return "High junction density"
 
 def get_storage_coefficient_interpretation(storage_coefficient):
-    if storage_coefficient < 10:
+    if storage_coefficient is None:
+        return "Unable to calculate storage coefficient"
+    elif storage_coefficient < 10:
         return "Low storage capacity"
     elif 10 <= storage_coefficient < 30:
         return "Moderate storage capacity"
