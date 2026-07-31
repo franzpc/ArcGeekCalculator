@@ -33,22 +33,22 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         snapping_config = iface.mapCanvas().snappingUtils().config()
         snapping_config.setEnabled(True)
         try:
-            snapping_config.setTypeFlag(QgsSnappingConfig.VertexFlag | QgsSnappingConfig.SegmentFlag)
+            snapping_config.setTypeFlag(QgsSnappingConfig.SnappingTypes.VertexFlag | QgsSnappingConfig.SnappingTypes.SegmentFlag)
         except TypeError:
-            snapping_config.setType(QgsSnappingConfig.Vertex | QgsSnappingConfig.Segment)
+            snapping_config.setType(QgsSnappingConfig.SnappingType.Vertex | QgsSnappingConfig.SnappingType.Segment)
         iface.mapCanvas().snappingUtils().setConfig(snapping_config)
 
     def deactivate_snapping(self):
         snapping_config = iface.mapCanvas().snappingUtils().config()
         snapping_config.setEnabled(False)
         try:
-            snapping_config.setTypeFlag(QgsSnappingConfig.VertexFlag | QgsSnappingConfig.SegmentFlag)
+            snapping_config.setTypeFlag(QgsSnappingConfig.SnappingTypes.VertexFlag | QgsSnappingConfig.SnappingTypes.SegmentFlag)
         except TypeError:
-            snapping_config.setType(QgsSnappingConfig.Vertex | QgsSnappingConfig.Segment)
+            snapping_config.setType(QgsSnappingConfig.SnappingType.Vertex | QgsSnappingConfig.SnappingType.Segment)
         iface.mapCanvas().snappingUtils().setConfig(snapping_config)
 
     def get_points(self, geometry):
-        if geometry.type() == QgsWkbTypes.LineGeometry:
+        if geometry.type() == QgsWkbTypes.GeometryType.LineGeometry:
             if geometry.isMultipart():
                 multilines = geometry.asMultiPolyline()
                 if multilines:
@@ -280,7 +280,7 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                     upstream_path = self.find_main_channel_to_headwater(longest_branch[1], stream_layer, visited)
                     result.extend(upstream_path)
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error in find_main_channel_to_headwater: {str(e)}", level=Qgis.Critical)
+            QgsMessageLog.logMessage(f"Error in find_main_channel_to_headwater: {str(e)}", level=Qgis.MessageLevel.Critical)
         return result
 
     def trace_complete_path(self, start_feature, stream_layer, visited=None):
@@ -297,7 +297,7 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                 branch = self.trace_complete_path(upstream, stream_layer, visited)
                 result.extend(branch)
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error in trace_complete_path: {str(e)}", level=Qgis.Critical)
+            QgsMessageLog.logMessage(f"Error in trace_complete_path: {str(e)}", level=Qgis.MessageLevel.Critical)
         return result
 
     def get_elevation_at_point(self, dem_layer, point):
@@ -772,20 +772,20 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_DEM, 'Input DEM'))
         self.addParameter(QgsProcessingParameterPoint(self.POUR_POINT, 'Pour Point (click on the river)'))
         self.addParameter(QgsProcessingParameterVectorLayer(self.INPUT_STREAM, 'Input Stream Network', 
-                                                           types=[QgsProcessing.TypeVectorLine], optional=False))
+                                                           types=[QgsProcessing.SourceType.TypeVectorLine], optional=False))
         self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_ITERATIONS, 'Smoothing Iterations', 
-                                                       type=QgsProcessingParameterNumber.Integer, 
+                                                       type=QgsProcessingParameterNumber.Type.Integer, 
                                                        minValue=0, maxValue=10, defaultValue=1))
         self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_OFFSET, 'Smoothing Offset', 
-                                                       type=QgsProcessingParameterNumber.Double, 
+                                                       type=QgsProcessingParameterNumber.Type.Double, 
                                                        minValue=0.0, maxValue=0.5, defaultValue=0.25))
         self.addParameter(QgsProcessingParameterBoolean(self.CALC_LONGEST_PATH, 
                                                         'Calculate Longest Flow Path', 
                                                         defaultValue=False))
         self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_BASIN, 'Watershed Basin', 
-                                                            QgsProcessing.TypeVectorPolygon))
+                                                            QgsProcessing.SourceType.TypeVectorPolygon))
         self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_STREAM, 'Basin Stream Network', 
-                                                            QgsProcessing.TypeVectorLine))
+                                                            QgsProcessing.SourceType.TypeVectorLine))
 
     def processAlgorithm(self, parameters, context, feedback):
         dem = self.parameterAsRasterLayer(parameters, self.INPUT_DEM, context)
@@ -798,7 +798,7 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         if not dem.isValid():
             raise QgsProcessingException(self.tr('Invalid input DEM'))
 
-        if not input_stream or input_stream.geometryType() != QgsWkbTypes.LineGeometry:
+        if not input_stream or input_stream.geometryType() != QgsWkbTypes.GeometryType.LineGeometry:
             raise QgsProcessingException(self.tr('Input Stream Network must be a line layer'))
 
         original_cell_size = dem.rasterUnitsPerPixelX()
@@ -885,14 +885,14 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         basin_layer = smoothed_basin
 
         (sink, dest_id) = self.parameterAsSink(parameters, self.OUTPUT_BASIN, context,
-                                               basin_layer.fields(), QgsWkbTypes.Polygon, basin_layer.crs())
+                                               basin_layer.fields(), QgsWkbTypes.Type.Polygon, basin_layer.crs())
         
         if sink is None:
             raise QgsProcessingException(self.invalidSinkError(parameters, self.OUTPUT_BASIN))
 
         features = basin_layer.getFeatures()
         for feature in features:
-            sink.addFeature(feature, QgsFeatureSink.FastInsert)
+            sink.addFeature(feature, QgsFeatureSink.Flag.FastInsert)
 
         results = {self.OUTPUT_BASIN: dest_id}
 
@@ -952,7 +952,7 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                     feedback.pushInfo("No outlet point found, skipping longest flow path")
 
             (stream_sink, stream_dest_id) = self.parameterAsSink(parameters, self.OUTPUT_STREAM, context,
-                                                                 clipped_stream.fields(), QgsWkbTypes.LineString, 
+                                                                 clipped_stream.fields(), QgsWkbTypes.Type.LineString, 
                                                                  clipped_stream.crs())
             
             if stream_sink is None:
@@ -960,7 +960,7 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
 
             stream_features = clipped_stream.getFeatures()
             for feature in stream_features:
-                stream_sink.addFeature(feature, QgsFeatureSink.FastInsert)
+                stream_sink.addFeature(feature, QgsFeatureSink.Flag.FastInsert)
 
             results[self.OUTPUT_STREAM] = stream_dest_id
         except Exception as e:

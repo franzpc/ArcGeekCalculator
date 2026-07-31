@@ -50,7 +50,7 @@ class LinesToOrderedPointsAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT,
                 self.tr('Input line layer'),
-                [QgsProcessing.TypeVectorLine]
+                [QgsProcessing.SourceType.TypeVectorLine]
             )
         )
         self.addParameter(
@@ -85,7 +85,7 @@ class LinesToOrderedPointsAlgorithm(QgsProcessingAlgorithm):
         fields.append(QgsField('Y', QVariant.Double))
 
         (sink, dest_id) = self.parameterAsSink(parameters, self.OUTPUT, context,
-                                               fields, QgsWkbTypes.Point, source.sourceCrs())
+                                               fields, QgsWkbTypes.Type.Point, source.sourceCrs())
 
         if source is None or sink is None:
             raise QgsProcessingException(self.invalidSourceError(parameters, self.INPUT))
@@ -122,7 +122,7 @@ class LinesToOrderedPointsAlgorithm(QgsProcessingAlgorithm):
             f = QgsFeature()
             f.setGeometry(QgsGeometry.fromPointXY(points[node]))
             f.setAttributes([order, points[node].x(), points[node].y()])
-            sink.addFeature(f, QgsFeatureSink.FastInsert)
+            sink.addFeature(f, QgsFeatureSink.Flag.FastInsert)
 
             neighbors = sorted(graph[node] - visited, key=lambda n: points[node].distance(points[n]))
             for neighbor in neighbors:
@@ -141,7 +141,7 @@ class LinesToOrderedPointsAlgorithm(QgsProcessingAlgorithm):
                 f = QgsFeature()
                 f.setGeometry(QgsGeometry.fromPointXY(points[node]))
                 f.setAttributes([order, points[node].x(), points[node].y()])
-                sink.addFeature(f, QgsFeatureSink.FastInsert)
+                sink.addFeature(f, QgsFeatureSink.Flag.FastInsert)
 
                 neighbors = sorted(graph[node] - visited, key=lambda n: len(graph[n]))
                 for neighbor in neighbors:

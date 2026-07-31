@@ -28,7 +28,7 @@ class ContourExportAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterVectorLayer(
                 self.INPUT,
                 self.tr('Input contour layer'),
-                [QgsProcessing.TypeVectorLine]
+                [QgsProcessing.SourceType.TypeVectorLine]
             )
         )
         
@@ -36,7 +36,7 @@ class ContourExportAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterField(
                 self.ELEVATION_FIELD,
                 self.tr('Elevation field'),
-                type=QgsProcessingParameterField.Numeric,
+                type=QgsProcessingParameterField.DataType.Numeric,
                 parentLayerParameterName=self.INPUT
             )
         )

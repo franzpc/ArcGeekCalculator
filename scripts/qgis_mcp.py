@@ -2187,7 +2187,7 @@ class QgisMCPServer(QObject):
         if geometry_field:
             definition.setGeometryField(geometry_field)
         else:
-            definition.setGeometryWkbType(QgsWkbTypes.NoGeometry)
+            definition.setGeometryWkbType(QgsWkbTypes.Type.NoGeometry)
         if uid_field:
             definition.setUid(uid_field)
         vlayer = QgsVectorLayer(definition.toString(), layer_name, "virtual")
@@ -2819,7 +2819,7 @@ class MCPConfiguratorDialog(QDialog):
 
     def setup_environment(self):
         """Run environment setup in background."""
-        if self.setup_process and self.setup_process.state() == QProcess.Running:
+        if self.setup_process and self.setup_process.state() == QProcess.ProcessState.Running:
             return
 
         has_uv = bool(shutil.which("uv"))
@@ -3180,7 +3180,7 @@ class QgisMCPPlugin:
             self.iface.messageBar().pushMessage(
                 "QGIS MCP",
                 f"{msg} Open the 'MCP Setup & Configurator' to get started.",
-                level=Qgis.Info,
+                level=Qgis.MessageLevel.Info,
                 duration=10
             )
             
@@ -3266,7 +3266,7 @@ class QgisMCPDialog(QDialog):
         try:
             tool_flag = Qt.WindowType.Tool
         except AttributeError:
-            tool_flag = Qt.Tool
+            tool_flag = Qt.WindowType.Tool
         self.setWindowFlags(self.windowFlags() | tool_flag)
         self.iface = iface
         self.server = None
@@ -3277,7 +3277,7 @@ class QgisMCPDialog(QDialog):
         try:
             align_center = Qt.AlignmentFlag.AlignCenter
         except AttributeError:
-            align_center = Qt.AlignCenter
+            align_center = Qt.AlignmentFlag.AlignCenter
 
         layout = QVBoxLayout(self)
 
@@ -3389,7 +3389,7 @@ class QgisMCPDialog(QDialog):
         try:
             dlg.exec()
         except AttributeError:
-            dlg.exec_()
+            dlg.exec()
 
     def start_server(self):
         if not self.server:

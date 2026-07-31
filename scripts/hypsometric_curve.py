@@ -1,22 +1,9 @@
 from qgis.core import *
 from qgis.analysis import QgsZonalStatistics
 
-try:
-    from qgis.PyQt.QtGui import QColor, QPainter, QFont, QImage, QPen, QBrush, QPolygonF
-    from qgis.PyQt.QtCore import QSize, Qt, QPointF, QRectF
-    QT_VERSION = "PyQt_via_QGIS"
-except ImportError:
-    try:
-        from PyQt6.QtGui import QColor, QPainter, QFont, QImage, QPen, QBrush, QPolygonF
-        from PyQt6.QtCore import QSize, Qt, QPointF, QRectF
-        QT_VERSION = "PyQt6"
-    except ImportError:
-        try:
-            from PyQt5.QtGui import QColor, QPainter, QFont, QImage, QPen, QBrush, QPolygonF
-            from PyQt5.QtCore import QSize, Qt, QPointF, QRectF
-            QT_VERSION = "PyQt5"
-        except ImportError:
-            raise ImportError("No compatible Qt version found. Please install PyQt5 or PyQt6.")
+# qgis.PyQt resolves to PyQt5 (Qt5) or PyQt6 (Qt6) depending on the QGIS build
+from qgis.PyQt.QtGui import QColor, QPainter, QFont, QImage, QPen, QBrush, QPolygonF
+from qgis.PyQt.QtCore import QSize, Qt, QPointF, QRectF
 
 import processing
 import os
@@ -362,64 +349,27 @@ def generate_hypsometric_curve(dem_layer, basin_layer, output_folder, feedback, 
 def create_static_image(relative_area, relative_height, curve_color, point_color, output_folder, hi, total_area_km2, stage):
     width, height = 700, 700
     
-    try:
-        if hasattr(QImage, 'Format'):
-            image_format = QImage.Format.Format_ARGB32_Premultiplied
-        else:
-            image_format = QImage.Format_ARGB32_Premultiplied
-    except AttributeError:
-        try:
-            image_format = QImage.Format_ARGB32_Premultiplied
-        except:
-            image_format = 5
-    
+    image_format = QImage.Format.Format_ARGB32_Premultiplied
+
     image = QImage(QSize(width, height), image_format)
-    
-    try:
-        if hasattr(Qt, 'GlobalColor'):
-            white_color = Qt.GlobalColor.white
-            black_color = Qt.GlobalColor.black
-            solid_line = Qt.PenStyle.SolidLine
-            dash_line = Qt.PenStyle.DashLine
-            dot_line = Qt.PenStyle.DotLine
-            dash_dot_line = Qt.PenStyle.DashDotLine
-            align_center = Qt.AlignmentFlag.AlignCenter
-            align_right = Qt.AlignmentFlag.AlignRight
-            align_vcenter = Qt.AlignmentFlag.AlignVCenter
-        else:
-            white_color = Qt.white
-            black_color = Qt.black
-            solid_line = Qt.SolidLine
-            dash_line = Qt.DashLine
-            dot_line = Qt.DotLine
-            dash_dot_line = Qt.DashDotLine
-            align_center = Qt.AlignCenter
-            align_right = Qt.AlignRight
-            align_vcenter = Qt.AlignVCenter
-    except:
-        white_color = Qt.white
-        black_color = Qt.black
-        solid_line = Qt.SolidLine
-        dash_line = Qt.DashLine
-        dot_line = Qt.DotLine
-        dash_dot_line = Qt.DashDotLine
-        align_center = Qt.AlignCenter
-        align_right = Qt.AlignRight
-        align_vcenter = Qt.AlignVCenter
-    
+
+    white_color = Qt.GlobalColor.white
+    black_color = Qt.GlobalColor.black
+    solid_line = Qt.PenStyle.SolidLine
+    dash_line = Qt.PenStyle.DashLine
+    dot_line = Qt.PenStyle.DotLine
+    dash_dot_line = Qt.PenStyle.DashDotLine
+    align_center = Qt.AlignmentFlag.AlignCenter
+    align_right = Qt.AlignmentFlag.AlignRight
+    align_vcenter = Qt.AlignmentFlag.AlignVCenter
+
     image.fill(white_color)
     
     painter = QPainter()
     painter.begin(image)
     
-    try:
-        if hasattr(QPainter, 'RenderHint'):
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        else:
-            painter.setRenderHint(QPainter.Antialiasing)
-    except:
-        painter.setRenderHint(QPainter.Antialiasing)
-    
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
     margin_left = 80
     margin_right = 80
     margin_top = 80
@@ -469,14 +419,8 @@ def create_static_image(relative_area, relative_height, curve_color, point_color
     
     painter.setPen(QPen(black_color))
     
-    try:
-        if hasattr(QFont, 'Weight'):
-            painter.setFont(QFont('Arial', 12, QFont.Weight.Bold))
-        else:
-            painter.setFont(QFont('Arial', 12, QFont.Bold))
-    except:
-        painter.setFont(QFont('Arial', 12, QFont.Bold))
-    
+    painter.setFont(QFont('Arial', 12, QFont.Weight.Bold))
+
     painter.drawText(
         QRectF(width/2 - 300, 10, 600, 30), 
         align_center,

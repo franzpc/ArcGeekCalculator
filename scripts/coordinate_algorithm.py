@@ -42,7 +42,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
         return 'arcgeek_calculator'
 
     def flags(self):
-        return super().flags() | QgsProcessingAlgorithm.FlagNoThreading
+        return super().flags() | QgsProcessingAlgorithm.Flag.FlagNoThreading
 
     def shortHelpString(self):
         return self.tr("""
@@ -66,7 +66,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT,
                 self.tr('Input layer'),
-                [QgsProcessing.TypeVectorPoint]
+                [QgsProcessing.SourceType.TypeVectorPoint]
             )
         )
         
@@ -122,7 +122,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.PRECISION,
                 self.tr('Precision'),
-                type=QgsProcessingParameterNumber.Integer,
+                type=QgsProcessingParameterNumber.Type.Integer,
                 minValue=0,
                 maxValue=15,
                 defaultValue=2
@@ -226,7 +226,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
                             break
                         
                         geom = feature.geometry()
-                        if geom.type() != QgsWkbTypes.PointGeometry:
+                        if geom.type() != QgsWkbTypes.GeometryType.PointGeometry:
                             continue
                         
                         point = geom.asPoint()
@@ -287,8 +287,8 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
                         break
                     
                     geom = feature.geometry()
-                    if geom.type() != QgsWkbTypes.PointGeometry:
-                        sink.addFeature(feature, QgsFeatureSink.FastInsert)
+                    if geom.type() != QgsWkbTypes.GeometryType.PointGeometry:
+                        sink.addFeature(feature, QgsFeatureSink.Flag.FastInsert)
                         continue
                     
                     point = geom.asPoint()
@@ -296,7 +296,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
                         point_in_crs = transform_to_crs.transform(point)
                         point_wgs84 = transform_to_wgs84.transform(point_in_crs)
                     except QgsCsException:
-                        sink.addFeature(feature, QgsFeatureSink.FastInsert)
+                        sink.addFeature(feature, QgsFeatureSink.Flag.FastInsert)
                         continue
                     
                     new_feature = QgsFeature(output_fields)
@@ -320,7 +320,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
                         new_feature.setAttribute('Lat_DMS', convert_to_dms2(point_wgs84.y(), 'lat', precision))
                         new_feature.setAttribute('Lon_DMS', convert_to_dms2(point_wgs84.x(), 'lon', precision))
                     
-                    sink.addFeature(new_feature, QgsFeatureSink.FastInsert)
+                    sink.addFeature(new_feature, QgsFeatureSink.Flag.FastInsert)
                     feedback.setProgress(int((current + 1) / total_features * 100))
                 
                 feedback.pushInfo(f"Created new layer: {dest_id}")

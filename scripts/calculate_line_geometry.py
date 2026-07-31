@@ -21,14 +21,14 @@ class CalculateLineGeometryAlgorithm(QgsProcessingAlgorithm):
     def __init__(self):
         super().__init__()
         self.units = [
-            QgsUnitTypes.DistanceMeters,
-            QgsUnitTypes.DistanceKilometers,
-            QgsUnitTypes.DistanceFeet,
-            QgsUnitTypes.DistanceYards,
-            QgsUnitTypes.DistanceMiles,
-            QgsUnitTypes.DistanceNauticalMiles,
-            QgsUnitTypes.DistanceCentimeters,
-            QgsUnitTypes.DistanceMillimeters
+            QgsUnitTypes.DistanceUnit.DistanceMeters,
+            QgsUnitTypes.DistanceUnit.DistanceKilometers,
+            QgsUnitTypes.DistanceUnit.DistanceFeet,
+            QgsUnitTypes.DistanceUnit.DistanceYards,
+            QgsUnitTypes.DistanceUnit.DistanceMiles,
+            QgsUnitTypes.DistanceUnit.DistanceNauticalMiles,
+            QgsUnitTypes.DistanceUnit.DistanceCentimeters,
+            QgsUnitTypes.DistanceUnit.DistanceMillimeters
         ]
 
     def tr(self, string):
@@ -50,7 +50,7 @@ class CalculateLineGeometryAlgorithm(QgsProcessingAlgorithm):
         return 'arcgeekcalculator'
 
     def flags(self):
-        return super().flags() | QgsProcessingAlgorithm.FlagNoThreading
+        return super().flags() | QgsProcessingAlgorithm.Flag.FlagNoThreading
 
     def shortHelpString(self):
         return self.tr("""Calculates and adds a length field to line layers.
@@ -72,7 +72,7 @@ class CalculateLineGeometryAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterVectorLayer(
                 self.INPUT,
                 self.tr('Input line layer'),
-                [QgsWkbTypes.LineGeometry]
+                [QgsWkbTypes.GeometryType.LineGeometry]
             )
         )
         self.addParameter(
@@ -87,7 +87,7 @@ class CalculateLineGeometryAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.PRECISION,
                 self.tr('Precision'),
-                type=QgsProcessingParameterNumber.Integer,
+                type=QgsProcessingParameterNumber.Type.Integer,
                 minValue=0,
                 maxValue=15,
                 defaultValue=2
@@ -199,7 +199,7 @@ class CalculateLineGeometryAlgorithm(QgsProcessingAlgorithm):
                 for field in source.fields():
                     new_feature[field.name()] = feature[field.name()]
                 new_feature[length_field] = length
-                sink.addFeature(new_feature, QgsFeatureSink.FastInsert)
+                sink.addFeature(new_feature, QgsFeatureSink.Flag.FastInsert)
 
             feedback.setProgress(int(current * total))
 

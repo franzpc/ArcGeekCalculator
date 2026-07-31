@@ -17,7 +17,7 @@ class PolygonToPointsAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT,
                 self.tr('Input polygon layer'),
-                [QgsProcessing.TypeVectorPolygon]
+                [QgsProcessing.SourceType.TypeVectorPolygon]
             )
         )
         self.addParameter(
@@ -25,7 +25,7 @@ class PolygonToPointsAlgorithm(QgsProcessingAlgorithm):
                 self.POLYGON_ID_FIELD,
                 self.tr('Polygon ID Field'),
                 parentLayerParameterName=self.INPUT,
-                type=QgsProcessingParameterField.Any
+                type=QgsProcessingParameterField.DataType.Any
             )
         )
         self.addParameter(
@@ -64,7 +64,7 @@ class PolygonToPointsAlgorithm(QgsProcessingAlgorithm):
         fields.append(QgsField('Polygon_ID', QVariant.String))
 
         (sink, dest_id) = self.parameterAsSink(parameters, self.OUTPUT, context,
-                                               fields, QgsWkbTypes.Point,
+                                               fields, QgsWkbTypes.Type.Point,
                                                source.sourceCrs())
 
         total = 100.0 / source.featureCount() if source.featureCount() else 0
@@ -130,7 +130,7 @@ class PolygonToPointsAlgorithm(QgsProcessingAlgorithm):
                         ccw_id,
                         str(polygon_id)
                     ])
-                    sink.addFeature(f, QgsFeatureSink.FastInsert)
+                    sink.addFeature(f, QgsFeatureSink.Flag.FastInsert)
 
             feedback.setProgress(int(current * total))
 

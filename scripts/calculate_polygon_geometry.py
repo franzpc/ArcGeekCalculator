@@ -22,26 +22,26 @@ class CalculatePolygonGeometryAlgorithm(QgsProcessingAlgorithm):
     def __init__(self):
         super().__init__()
         self.area_units = [
-            QgsUnitTypes.AreaSquareMeters,
-            QgsUnitTypes.AreaSquareKilometers,
-            QgsUnitTypes.AreaHectares,
-            QgsUnitTypes.AreaSquareFeet,
-            QgsUnitTypes.AreaSquareYards,
-            QgsUnitTypes.AreaAcres,
-            QgsUnitTypes.AreaSquareMiles,
-            QgsUnitTypes.AreaSquareNauticalMiles,
-            QgsUnitTypes.AreaSquareCentimeters,
-            QgsUnitTypes.AreaSquareMillimeters
+            QgsUnitTypes.AreaUnit.AreaSquareMeters,
+            QgsUnitTypes.AreaUnit.AreaSquareKilometers,
+            QgsUnitTypes.AreaUnit.AreaHectares,
+            QgsUnitTypes.AreaUnit.AreaSquareFeet,
+            QgsUnitTypes.AreaUnit.AreaSquareYards,
+            QgsUnitTypes.AreaUnit.AreaAcres,
+            QgsUnitTypes.AreaUnit.AreaSquareMiles,
+            QgsUnitTypes.AreaUnit.AreaSquareNauticalMiles,
+            QgsUnitTypes.AreaUnit.AreaSquareCentimeters,
+            QgsUnitTypes.AreaUnit.AreaSquareMillimeters
         ]
         self.perimeter_units = [
-            QgsUnitTypes.DistanceMeters,
-            QgsUnitTypes.DistanceKilometers,
-            QgsUnitTypes.DistanceFeet,
-            QgsUnitTypes.DistanceYards,
-            QgsUnitTypes.DistanceMiles,
-            QgsUnitTypes.DistanceNauticalMiles,
-            QgsUnitTypes.DistanceCentimeters,
-            QgsUnitTypes.DistanceMillimeters
+            QgsUnitTypes.DistanceUnit.DistanceMeters,
+            QgsUnitTypes.DistanceUnit.DistanceKilometers,
+            QgsUnitTypes.DistanceUnit.DistanceFeet,
+            QgsUnitTypes.DistanceUnit.DistanceYards,
+            QgsUnitTypes.DistanceUnit.DistanceMiles,
+            QgsUnitTypes.DistanceUnit.DistanceNauticalMiles,
+            QgsUnitTypes.DistanceUnit.DistanceCentimeters,
+            QgsUnitTypes.DistanceUnit.DistanceMillimeters
         ]
 
     def tr(self, string):
@@ -63,7 +63,7 @@ class CalculatePolygonGeometryAlgorithm(QgsProcessingAlgorithm):
         return 'arcgeekcalculator'
 
     def flags(self):
-        return super().flags() | QgsProcessingAlgorithm.FlagNoThreading
+        return super().flags() | QgsProcessingAlgorithm.Flag.FlagNoThreading
 
     def shortHelpString(self):
         return self.tr("""Calculates and adds area and perimeter fields to polygon layers.
@@ -86,7 +86,7 @@ class CalculatePolygonGeometryAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterVectorLayer(
                 self.INPUT,
                 self.tr('Input polygon layer'),
-                [QgsWkbTypes.PolygonGeometry]
+                [QgsWkbTypes.GeometryType.PolygonGeometry]
             )
         )
         self.addParameter(
@@ -109,7 +109,7 @@ class CalculatePolygonGeometryAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.PRECISION,
                 self.tr('Precision'),
-                type=QgsProcessingParameterNumber.Integer,
+                type=QgsProcessingParameterNumber.Type.Integer,
                 minValue=0,
                 maxValue=15,
                 defaultValue=2
@@ -239,7 +239,7 @@ class CalculatePolygonGeometryAlgorithm(QgsProcessingAlgorithm):
                     new_feature[field.name()] = feature[field.name()]
                 new_feature[area_field] = area
                 new_feature[perimeter_field] = perimeter
-                sink.addFeature(new_feature, QgsFeatureSink.FastInsert)
+                sink.addFeature(new_feature, QgsFeatureSink.Flag.FastInsert)
 
             feedback.setProgress(int(current * total))
 

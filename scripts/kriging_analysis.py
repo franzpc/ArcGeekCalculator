@@ -142,7 +142,7 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT_LAYER,
                 self.tr('Input point layer'),
-                [QgsProcessing.TypeVectorPoint]
+                [QgsProcessing.SourceType.TypeVectorPoint]
             )
         )
         
@@ -152,7 +152,7 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
                 self.INPUT_FIELD,
                 self.tr('Value field to interpolate'),
                 parentLayerParameterName=self.INPUT_LAYER,
-                type=QgsProcessingParameterField.Numeric
+                type=QgsProcessingParameterField.DataType.Numeric
             )
         )
         
@@ -161,7 +161,7 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.OUTPUT_CELLSIZE,
                 self.tr('Output cell size (use larger values for projected CRS in meters, e.g. 100-1000)'),
-                QgsProcessingParameterNumber.Double,
+                QgsProcessingParameterNumber.Type.Double,
                 defaultValue=10.0,
                 minValue=0.01
             )
@@ -224,7 +224,7 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.MIN_VALUE,
                 self.tr('Minimum value (optional)'),
-                QgsProcessingParameterNumber.Double,
+                QgsProcessingParameterNumber.Type.Double,
                 optional=True
             )
         )
@@ -234,7 +234,7 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.MAX_VALUE,
                 self.tr('Maximum value (optional)'),
-                QgsProcessingParameterNumber.Double,
+                QgsProcessingParameterNumber.Type.Double,
                 optional=True
             )
         )

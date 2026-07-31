@@ -56,8 +56,8 @@ class GoToXYDialog(QDialog):
             self.history_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
             self.history_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         except AttributeError:
-            self.history_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-            self.history_table.setSelectionMode(QAbstractItemView.SingleSelection)
+            self.history_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+            self.history_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         
         self.history_table.itemSelectionChanged.connect(self.load_history_item)
         self.layout.addWidget(QLabel("History:"))
@@ -128,9 +128,9 @@ class GoToXYDialog(QDialog):
             self.go_to_xy(x, y, coord_type, crs, create_point)
             self.add_to_history(x, y, crs)
         except ValueError as e:
-            self.iface.messageBar().pushMessage("Error", str(e), level=Qgis.Warning)
+            self.iface.messageBar().pushMessage("Error", str(e), level=Qgis.MessageLevel.Warning)
         except Exception as e:
-            self.iface.messageBar().pushMessage("Error", f"An unexpected error occurred: {str(e)}", level=Qgis.Critical)
+            self.iface.messageBar().pushMessage("Error", f"An unexpected error occurred: {str(e)}", level=Qgis.MessageLevel.Critical)
     
     def add_to_history(self, x, y, crs):
         row_position = self.history_table.rowCount()
@@ -163,9 +163,9 @@ class GoToXYDialog(QDialog):
     def capture_coordinate(self):
         try:
             self.iface.mapCanvas().setMapTool(self.map_tool)
-            self.iface.messageBar().pushMessage("Info", "Click on the map to capture a coordinate", level=Qgis.Info)
+            self.iface.messageBar().pushMessage("Info", "Click on the map to capture a coordinate", level=Qgis.MessageLevel.Info)
         except Exception as e:
-            self.iface.messageBar().pushMessage("Error", f"Failed to activate map tool: {str(e)}", level=Qgis.Critical)
+            self.iface.messageBar().pushMessage("Error", f"Failed to activate map tool: {str(e)}", level=Qgis.MessageLevel.Critical)
     
     def map_clicked(self, point, button):
         try:
@@ -184,7 +184,7 @@ class GoToXYDialog(QDialog):
             self.crs_changed(project_crs)
             
         except Exception as e:
-            self.iface.messageBar().pushMessage("Error", f"Failed to capture coordinate: {str(e)}", level=Qgis.Critical)
+            self.iface.messageBar().pushMessage("Error", f"Failed to capture coordinate: {str(e)}", level=Qgis.MessageLevel.Critical)
 
     def go_to_xy(self, x, y, coord_type, source_crs, create_point):
         canvas = self.iface.mapCanvas()
@@ -204,7 +204,7 @@ class GoToXYDialog(QDialog):
             if create_point:
                 self.create_point_marker(point, dest_crs)
         except Exception as e:
-            self.iface.messageBar().pushMessage("Error", f"Failed to transform coordinates: {str(e)}", level=Qgis.Warning, duration=5)
+            self.iface.messageBar().pushMessage("Error", f"Failed to transform coordinates: {str(e)}", level=Qgis.MessageLevel.Warning, duration=5)
 
     def create_point_marker(self, point, crs):
         vl = QgsVectorLayer("Point?crs={}".format(crs.authid()), "Go to XY Point", "memory")
@@ -219,7 +219,7 @@ class GoToXYDialog(QDialog):
 
     def copy_coordinates(self):
         if self.history_table.rowCount() == 0:
-            self.iface.messageBar().pushMessage("Info", "No coordinates to copy.", level=Qgis.Info)
+            self.iface.messageBar().pushMessage("Info", "No coordinates to copy.", level=Qgis.MessageLevel.Info)
             return
         
         coordinates = ["X/Lon\tY/Lat\tCRS"]
@@ -233,4 +233,4 @@ class GoToXYDialog(QDialog):
         clipboard = QApplication.clipboard()
         clipboard.setText(coordinate_text)
         
-        self.iface.messageBar().pushMessage("Success", "Coordinates copied to clipboard.", level=Qgis.Success)
+        self.iface.messageBar().pushMessage("Success", "Coordinates copied to clipboard.", level=Qgis.MessageLevel.Success)

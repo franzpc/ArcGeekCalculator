@@ -38,7 +38,7 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterVectorLayer(
                 self.INPUT,
                 self.tr('Input polygon layer'),
-                [QgsProcessing.TypeVectorPolygon]
+                [QgsProcessing.SourceType.TypeVectorPolygon]
             )
         )
         
@@ -55,7 +55,7 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.BORDER_MARGIN,
                 self.tr('Border margin (distance from boundary)'),
-                type=QgsProcessingParameterNumber.Double,
+                type=QgsProcessingParameterNumber.Type.Double,
                 defaultValue=1.5,
                 minValue=0.0
             )
@@ -81,7 +81,7 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
                 self.tr('Output planting points'),
-                QgsProcessing.TypeVectorPoint
+                QgsProcessing.SourceType.TypeVectorPoint
             )
         )
         
@@ -126,7 +126,7 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
             fields.append(QgsField('slope', QVariant.Double, 'Slope (degrees)', 10, 2))
         
         (sink, dest_id) = self.parameterAsSink(
-            parameters, self.OUTPUT, context, fields, QgsWkbTypes.Point, source.crs()
+            parameters, self.OUTPUT, context, fields, QgsWkbTypes.Type.Point, source.crs()
         )
         
         if sink is None:
@@ -270,7 +270,7 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
                     attributes.append(None)
                 
                 feat.setAttributes(attributes)
-                sink.addFeature(feat, QgsFeatureSink.FastInsert)
+                sink.addFeature(feat, QgsFeatureSink.Flag.FastInsert)
                 feature_id_counter += 1
         
         # Calculate areas in hectares
@@ -322,7 +322,7 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
                 return None
             
             # Diagnostic: Report stats of the generated slope raster
-            stats = slope_layer.dataProvider().bandStatistics(1, QgsRasterBandStats.All)
+            stats = slope_layer.dataProvider().bandStatistics(1, QgsRasterBandStats.Stats.All)
             feedback.pushInfo(f"Statistics for generated slope raster: MIN={stats.minimumValue:.2f}, MAX={stats.maximumValue:.2f}")
 
             feedback.pushInfo("Slope map generated successfully.")
@@ -344,7 +344,7 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
                 point_for_sampling = point_geom.asPoint()
             
             # Use identify method for robust sampling
-            identify_result = slope_layer.dataProvider().identify(point_for_sampling, QgsRaster.IdentifyFormatValue)
+            identify_result = slope_layer.dataProvider().identify(point_for_sampling, QgsRaster.IdentifyFormat.IdentifyFormatValue)
             
             if identify_result and identify_result.isValid():
                 slope_value = list(identify_result.results().values())[0]
@@ -474,7 +474,7 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
                     if stream_geom.intersects(geom):
                         intersection = stream_geom.intersection(geom)
                         
-                        if not intersection.isEmpty() and intersection.type() == QgsWkbTypes.LineGeometry:
+                        if not intersection.isEmpty() and intersection.type() == QgsWkbTypes.GeometryType.LineGeometry:
                             if intersection.isMultipart():
                                 lines = intersection.asMultiPolyline()
                                 all_stream_lines.extend(lines)
@@ -564,7 +564,7 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
                 if stream_geom.intersects(polygon_geom):
                     intersection = stream_geom.intersection(polygon_geom)
                     
-                    if not intersection.isEmpty() and intersection.type() == QgsWkbTypes.LineGeometry:
+                    if not intersection.isEmpty() and intersection.type() == QgsWkbTypes.GeometryType.LineGeometry:
                         stream_geometries.append(intersection)
             
             # Check each point against all streams

@@ -51,7 +51,7 @@ class LandUseChangeDetectionAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_RASTER_BEFORE, 'Input raster layer (before)'))
         self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_RASTER_AFTER, 'Input raster layer (after)'))
         self.addParameter(QgsProcessingParameterNumber(self.CATEGORY_TO_ANALYZE, 'Category to analyze', 
-                                                   type=QgsProcessingParameterNumber.Integer, 
+                                                   type=QgsProcessingParameterNumber.Type.Integer, 
                                                    minValue=0,  # Allow zero, but will validate against actual categories later
                                                    defaultValue=1))
         self.addParameter(QgsProcessingParameterRasterDestination(self.OUTPUT_DETAILED_RASTER, 'Output detailed change raster', optional=True))
@@ -174,7 +174,7 @@ class LandUseChangeDetectionAlgorithm(QgsProcessingAlgorithm):
     def get_unique_values(self, raster_layer):
         """Get unique values range from raster layer (min to max)"""
         provider = raster_layer.dataProvider()
-        stats = provider.bandStatistics(1, QgsRasterBandStats.All)
+        stats = provider.bandStatistics(1, QgsRasterBandStats.Stats.All)
         min_val = int(stats.minimumValue)
         max_val = int(stats.maximumValue)
         return sorted(set(range(min_val, max_val + 1)))
@@ -240,7 +240,7 @@ class LandUseChangeDetectionAlgorithm(QgsProcessingAlgorithm):
         if layer.isValid():
             shader = QgsRasterShader()
             color_ramp = QgsColorRampShader()
-            color_ramp.setColorRampType(QgsColorRampShader.Discrete)
+            color_ramp.setColorRampType(QgsColorRampShader.Type.Discrete)
             color_ramp.setColorRampItemList([QgsColorRampShader.ColorRampItem(value, color, label) for value, color, label in color_map])
             shader.setRasterShaderFunction(color_ramp)
             renderer = QgsSingleBandPseudoColorRenderer(layer.dataProvider(), 1, shader)
@@ -258,7 +258,7 @@ class LandUseChangeDetectionAlgorithm(QgsProcessingAlgorithm):
         if layer.isValid():
             shader = QgsRasterShader()
             color_ramp = QgsColorRampShader()
-            color_ramp.setColorRampType(QgsColorRampShader.Discrete)
+            color_ramp.setColorRampType(QgsColorRampShader.Type.Discrete)
             
             # Create a color map using Viridis-like colors
             color_map = []

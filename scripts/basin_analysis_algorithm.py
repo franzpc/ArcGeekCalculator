@@ -26,11 +26,11 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
     OUTPUT_HYPSOMETRIC = 'OUTPUT_HYPSOMETRIC'
 
     def initAlgorithm(self, config=None):
-        self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT_BASIN, 'Basin layer', [QgsProcessing.TypeVectorPolygon]))
-        self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT_STREAMS, 'Stream network', [QgsProcessing.TypeVectorLine]))
+        self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT_BASIN, 'Basin layer', [QgsProcessing.SourceType.TypeVectorPolygon]))
+        self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT_STREAMS, 'Stream network', [QgsProcessing.SourceType.TypeVectorLine]))
         self.addParameter(QgsProcessingParameterField(self.STREAM_ORDER_FIELD, 'Field containing stream order (Strahler)', optional=False, parentLayerParameterName=self.INPUT_STREAMS))
         self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_DEM, 'Digital Elevation Model'))
-        self.addParameter(QgsProcessingParameterNumber(self.PRECISION, 'Decimal precision', type=QgsProcessingParameterNumber.Integer, minValue=0, maxValue=15, defaultValue=4))
+        self.addParameter(QgsProcessingParameterNumber(self.PRECISION, 'Decimal precision', type=QgsProcessingParameterNumber.Type.Integer, minValue=0, maxValue=15, defaultValue=4))
         self.addParameter(QgsProcessingParameterEnum(
             self.HYPSOMETRIC_METHOD,
             'Hypsometric calculation method',
@@ -38,7 +38,7 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
             defaultValue=0
         ))
         
-        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT, 'Morphometric Report', QgsProcessing.TypeVector))
+        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT, 'Morphometric Report', QgsProcessing.SourceType.TypeVector))
         self.addParameter(
             QgsProcessingParameterFileDestination(
                 self.OUTPUT_HYPSOMETRIC,
@@ -97,7 +97,7 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
             units = crs.mapUnits()
             try:
                 from qgis.core import QgsUnitTypes
-                is_meters = (units == QgsUnitTypes.DistanceMeters)
+                is_meters = (units == QgsUnitTypes.DistanceUnit.DistanceMeters)
             except Exception:
                 is_meters = True  # cannot determine, allow through
             if not is_meters:
@@ -129,7 +129,7 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
             fields.append(QgsField("Unit", QVariant.String))
             fields.append(QgsField("Interpretation", QVariant.String))
 
-            sink, dest_id = self.parameterAsSink(parameters, self.OUTPUT, context, fields, QgsWkbTypes.Point, basin_layer.crs())
+            sink, dest_id = self.parameterAsSink(parameters, self.OUTPUT, context, fields, QgsWkbTypes.Type.Point, basin_layer.crs())
 
             for param, details in results.items():
                 feature = QgsFeature()
@@ -139,7 +139,7 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
                 feature.setAttribute("Value", self.round_or_null(details['value'], precision))
                 feature.setAttribute("Unit", details['unit'])
                 feature.setAttribute("Interpretation", details['interpretation'])
-                sink.addFeature(feature, QgsFeatureSink.FastInsert)
+                sink.addFeature(feature, QgsFeatureSink.Flag.FastInsert)
 
             hypsometric_output_dir = os.path.dirname(output_hypsometric) if output_hypsometric else QgsProcessingUtils.tempFolder()
             hypsometric_results = generate_hypsometric_curve(dem_clipped, basin_layer, hypsometric_output_dir, feedback, method)
@@ -152,7 +152,7 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
                 hi_feature.setAttribute("Value", self.round_or_null(hypsometric_results['HI'], precision))
                 hi_feature.setAttribute("Unit", "dimensionless")
                 hi_feature.setAttribute("Interpretation", hypsometric_results['STAGE'])
-                sink.addFeature(hi_feature, QgsFeatureSink.FastInsert)
+                sink.addFeature(hi_feature, QgsFeatureSink.Flag.FastInsert)
 
             if hypsometric_results and 'HTML' in hypsometric_results and hypsometric_results['HTML']:
                 try:

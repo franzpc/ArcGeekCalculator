@@ -47,7 +47,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterVectorLayer(
             self.INPUT_POINTS,
             'Input Point Shapefile',
-            types=[QgsProcessing.TypeVectorPoint],
+            types=[QgsProcessing.SourceType.TypeVectorPoint],
             optional=False
         ))
         
@@ -55,7 +55,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterNumber(
             self.FLOW_THRESHOLD,
             'Flow Accumulation Threshold',
-            type=QgsProcessingParameterNumber.Integer,
+            type=QgsProcessingParameterNumber.Type.Integer,
             minValue=1,
             maxValue=100000,
             defaultValue=5000
@@ -66,7 +66,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterNumber(
             self.SMOOTH_ITERATIONS,
             'Smooth Iterations',
-            type=QgsProcessingParameterNumber.Integer,
+            type=QgsProcessingParameterNumber.Type.Integer,
             minValue=1,
             maxValue=10,
             defaultValue=1
@@ -75,7 +75,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterNumber(
             self.SMOOTH_OFFSET,
             'Smooth Offset',
-            type=QgsProcessingParameterNumber.Double,
+            type=QgsProcessingParameterNumber.Type.Double,
             minValue=0.0,
             maxValue=0.5,
             defaultValue=0.25
@@ -91,7 +91,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterNumber(
             self.MAX_POINTS,
             'Maximum Points to Process (if not processing all)',
-            type=QgsProcessingParameterNumber.Integer,
+            type=QgsProcessingParameterNumber.Type.Integer,
             minValue=1,
             maxValue=1000,
             defaultValue=5
@@ -101,25 +101,25 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterFeatureSink(
             self.OUTPUT_STREAMS,
             'Global Stream Network',
-            QgsProcessing.TypeVectorLine
+            QgsProcessing.SourceType.TypeVectorLine
         ))
         
         self.addParameter(QgsProcessingParameterFeatureSink(
             self.OUTPUT_INTERSECTION_POINTS,
             'Snapped Pour Points',
-            QgsProcessing.TypeVectorPoint
+            QgsProcessing.SourceType.TypeVectorPoint
         ))
         
         self.addParameter(QgsProcessingParameterFeatureSink(
             self.OUTPUT_BASINS,
             'Watershed Basins (with Drainage Areas)',
-            QgsProcessing.TypeVectorPolygon
+            QgsProcessing.SourceType.TypeVectorPolygon
         ))
         
         self.addParameter(QgsProcessingParameterFeatureSink(
             self.OUTPUT_BASIN_STREAMS,
             'Local Stream Network',
-            QgsProcessing.TypeVectorLine
+            QgsProcessing.SourceType.TypeVectorLine
         ))
 
     def processAlgorithm(self, parameters, context, feedback):
@@ -187,38 +187,38 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             # Stream network output
             stream_sink, stream_dest_id = self.parameterAsSink(
                 parameters, self.OUTPUT_STREAMS, context,
-                stream_network.fields(), QgsWkbTypes.LineString, dem_layer.crs()
+                stream_network.fields(), QgsWkbTypes.Type.LineString, dem_layer.crs()
             )
             
             for feature in stream_network.getFeatures():
-                stream_sink.addFeature(feature, QgsFeatureSink.FastInsert)
+                stream_sink.addFeature(feature, QgsFeatureSink.Flag.FastInsert)
             
             # Snapped points output
             points_sink, points_dest_id = self.parameterAsSink(
                 parameters, self.OUTPUT_INTERSECTION_POINTS, context,
-                pour_points.fields(), QgsWkbTypes.Point, dem_layer.crs()
+                pour_points.fields(), QgsWkbTypes.Type.Point, dem_layer.crs()
             )
             
             for feature in pour_points.getFeatures():
-                points_sink.addFeature(feature, QgsFeatureSink.FastInsert)
+                points_sink.addFeature(feature, QgsFeatureSink.Flag.FastInsert)
             
             # Basin polygons output
             basins_sink, basins_dest_id = self.parameterAsSink(
                 parameters, self.OUTPUT_BASINS, context,
-                final_basins.fields(), QgsWkbTypes.Polygon, dem_layer.crs()
+                final_basins.fields(), QgsWkbTypes.Type.Polygon, dem_layer.crs()
             )
             
             for feature in final_basins.getFeatures():
-                basins_sink.addFeature(feature, QgsFeatureSink.FastInsert)
+                basins_sink.addFeature(feature, QgsFeatureSink.Flag.FastInsert)
             
             # Basin streams output
             basin_streams_sink, basin_streams_dest_id = self.parameterAsSink(
                 parameters, self.OUTPUT_BASIN_STREAMS, context,
-                basin_streams.fields(), QgsWkbTypes.LineString, dem_layer.crs()
+                basin_streams.fields(), QgsWkbTypes.Type.LineString, dem_layer.crs()
             )
             
             for feature in basin_streams.getFeatures():
-                basin_streams_sink.addFeature(feature, QgsFeatureSink.FastInsert)
+                basin_streams_sink.addFeature(feature, QgsFeatureSink.Flag.FastInsert)
             
             feedback.setProgress(100)
             feedback.pushInfo("Watershed analysis completed successfully!")
@@ -367,7 +367,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                 layer.updateFeature(feature)
                 return strahler, shreve
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error in get_stream_orders: {str(e)}", level=Qgis.Critical)
+            QgsMessageLog.logMessage(f"Error in get_stream_orders: {str(e)}", level=Qgis.MessageLevel.Critical)
             raise
 
     def find_upstream_features(self, feature, index, layer):
@@ -380,7 +380,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             return [f for f in self.get_nearby_features(start_point, index, layer)
                     if f.id() != feature.id() and self.get_end_point(f.geometry()) == start_point]
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error in find_upstream_features: {str(e)}", level=Qgis.Critical)
+            QgsMessageLog.logMessage(f"Error in find_upstream_features: {str(e)}", level=Qgis.MessageLevel.Critical)
             return []
 
     def find_downstream_features(self, feature, index, layer):
@@ -393,14 +393,14 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             return [f for f in self.get_nearby_features(end_point, index, layer)
                     if f.id() != feature.id() and self.get_start_point(f.geometry()) == end_point]
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error in find_downstream_features: {str(e)}", level=Qgis.Critical)
+            QgsMessageLog.logMessage(f"Error in find_downstream_features: {str(e)}", level=Qgis.MessageLevel.Critical)
             return []
 
     def is_valid_feature(self, feature):
         return feature.geometry() is not None and not feature.geometry().isNull() and feature.geometry().isGeosValid()
 
     def get_start_point(self, geometry):
-        if geometry.type() == QgsWkbTypes.LineGeometry:
+        if geometry.type() == QgsWkbTypes.GeometryType.LineGeometry:
             return geometry.asPolyline()[0] if geometry.asPolyline() else None
         elif geometry.type() == QgsWkbTypes.MultiLineGeometry:
             lines = geometry.asMultiPolyline()
@@ -408,7 +408,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         return None
 
     def get_end_point(self, geometry):
-        if geometry.type() == QgsWkbTypes.LineGeometry:
+        if geometry.type() == QgsWkbTypes.GeometryType.LineGeometry:
             return geometry.asPolyline()[-1] if geometry.asPolyline() else None
         elif geometry.type() == QgsWkbTypes.MultiLineGeometry:
             lines = geometry.asMultiPolyline()
@@ -648,11 +648,11 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                 
                 # Convert to square meters first (base unit)
                 crs = basin_layer.crs()
-                if crs.mapUnits() == QgsUnitTypes.DistanceMeters:
+                if crs.mapUnits() == QgsUnitTypes.DistanceUnit.DistanceMeters:
                     area_sq_meters = area_layer_units
-                elif crs.mapUnits() == QgsUnitTypes.DistanceFeet:
+                elif crs.mapUnits() == QgsUnitTypes.DistanceUnit.DistanceFeet:
                     area_sq_meters = area_layer_units * 0.092903
-                elif crs.mapUnits() == QgsUnitTypes.DistanceDegrees:
+                elif crs.mapUnits() == QgsUnitTypes.DistanceUnit.DistanceDegrees:
                     # Approximate conversion for degrees near equator, but better to warn user
                     # Ideally should reproject, but for now using simple approximation
                     area_sq_meters = area_layer_units * 111319.9 * 111319.9

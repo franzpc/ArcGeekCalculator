@@ -98,7 +98,7 @@ class TopographicProfileAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT_LINE,
                 self.tr('Input Line Layer'),
-                [QgsProcessing.TypeVectorLine]
+                [QgsProcessing.SourceType.TypeVectorLine]
             )
         )
         self.addParameter(
@@ -111,7 +111,7 @@ class TopographicProfileAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterVectorLayer(
                 self.INPUT_POINTS,
                 self.tr('Points Layer'),
-                [QgsProcessing.TypeVectorPoint],
+                [QgsProcessing.SourceType.TypeVectorPoint],
                 optional=True
             )
         )
@@ -127,7 +127,7 @@ class TopographicProfileAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.POINT_THRESHOLD,
                 self.tr('Maximum Distance for Points (meters)'),
-                type=QgsProcessingParameterNumber.Double,
+                type=QgsProcessingParameterNumber.Type.Double,
                 defaultValue=300.0,
                 minValue=0.0
             )

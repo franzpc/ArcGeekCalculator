@@ -46,7 +46,7 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
     bifurcation_ratio = calculate_bifurcation_ratio(streams_source, stream_order_field)
 
     try:
-        dem_stats = dem_layer.dataProvider().bandStatistics(1, QgsRasterBandStats.All)
+        dem_stats = dem_layer.dataProvider().bandStatistics(1, QgsRasterBandStats.Stats.All)
         max_elevation = dem_stats.maximumValue
         min_elevation = dem_stats.minimumValue
         relief = max_elevation - min_elevation

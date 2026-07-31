@@ -463,7 +463,7 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.PARAM_HEURISTIC_WEIGHT,
                 self.tr('Heuristic Weight (1.0 = balanced)'),
-                type=QgsProcessingParameterNumber.Double,
+                type=QgsProcessingParameterNumber.Type.Double,
                 defaultValue=1.0,
                 optional=True,
                 minValue=0.1,
@@ -475,7 +475,7 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.PARAM_SLOPE_WEIGHT,
                 self.tr('Slope Influence (0.0 = ignore slopes)'),
-                type=QgsProcessingParameterNumber.Double,
+                type=QgsProcessingParameterNumber.Type.Double,
                 defaultValue=0.5,
                 optional=True,
                 minValue=0.0,
@@ -487,7 +487,7 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.PARAM_DIAGONAL_FACTOR,
                 self.tr('Diagonal Movement Cost (1.0 = normal)'),
-                type=QgsProcessingParameterNumber.Double,
+                type=QgsProcessingParameterNumber.Type.Double,
                 defaultValue=1.0,
                 optional=True,
                 minValue=0.5,
@@ -500,7 +500,7 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.PARAM_FLAT_SENSITIVITY,
                 self.tr('Flat Terrain Sensitivity (0.0 = ignore, 1.0 = high)'),
-                type=QgsProcessingParameterNumber.Double,
+                type=QgsProcessingParameterNumber.Type.Double,
                 defaultValue=0.5,
                 optional=True,
                 minValue=0.0,
@@ -512,7 +512,7 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterVectorDestination(
                 self.OUTPUT_PATH,
                 self.tr('Output Optimal Path'),
-                type=QgsProcessing.TypeVectorLine
+                type=QgsProcessing.SourceType.TypeVectorLine
             )
         )
 
@@ -727,7 +727,7 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
             # Setup output layer
             (sink, dest_id) = self.parameterAsSink(
                 parameters, self.OUTPUT_PATH, context,
-                fields, QgsWkbTypes.LineString, cost_raster.crs()
+                fields, QgsWkbTypes.Type.LineString, cost_raster.crs()
             )
 
             if sink is None:
@@ -771,7 +771,7 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
                 1 if flat_sensitivity > 0 else 0  # Indicate if flat terrain analysis was used
             ])
 
-            sink.addFeature(feat, QgsFeatureSink.FastInsert)
+            sink.addFeature(feat, QgsFeatureSink.Flag.FastInsert)
 
             # Success message
             multi_feedback.pushInfo(f"Path calculation complete!")

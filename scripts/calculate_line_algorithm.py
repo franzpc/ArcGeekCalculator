@@ -21,13 +21,13 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
     OUTPUT_POINTS = 'OUTPUT_POINTS'
 
     def initAlgorithm(self, config=None):
-        self.addParameter(QgsProcessingParameterNumber(self.INPUT_X, 'Starting X coordinate', QgsProcessingParameterNumber.Double))
-        self.addParameter(QgsProcessingParameterNumber(self.INPUT_Y, 'Starting Y coordinate', QgsProcessingParameterNumber.Double))
-        self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT_TABLE, 'Input table', [QgsProcessing.TypeVector, QgsProcessing.TypeFile], optional=False))
-        self.addParameter(QgsProcessingParameterField(self.FIELD_DISTANCE, 'Distance field', parentLayerParameterName=self.INPUT_TABLE, type=QgsProcessingParameterField.Any, optional=False))
-        self.addParameter(QgsProcessingParameterField(self.FIELD_ANGLE, 'Angle field', parentLayerParameterName=self.INPUT_TABLE, type=QgsProcessingParameterField.Any, optional=False))
+        self.addParameter(QgsProcessingParameterNumber(self.INPUT_X, 'Starting X coordinate', QgsProcessingParameterNumber.Type.Double))
+        self.addParameter(QgsProcessingParameterNumber(self.INPUT_Y, 'Starting Y coordinate', QgsProcessingParameterNumber.Type.Double))
+        self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT_TABLE, 'Input table', [QgsProcessing.SourceType.TypeVector, QgsProcessing.SourceType.TypeFile], optional=False))
+        self.addParameter(QgsProcessingParameterField(self.FIELD_DISTANCE, 'Distance field', parentLayerParameterName=self.INPUT_TABLE, type=QgsProcessingParameterField.DataType.Any, optional=False))
+        self.addParameter(QgsProcessingParameterField(self.FIELD_ANGLE, 'Angle field', parentLayerParameterName=self.INPUT_TABLE, type=QgsProcessingParameterField.DataType.Any, optional=False))
         self.addParameter(QgsProcessingParameterEnum(self.ANGLE_TYPE, 'Angle type in input data', options=['Azimuth', 'Polar'], defaultValue=0))
-        self.addParameter(QgsProcessingParameterField(self.FIELD_OBSERVATIONS, 'Observations field', parentLayerParameterName=self.INPUT_TABLE, type=QgsProcessingParameterField.Any, optional=True))
+        self.addParameter(QgsProcessingParameterField(self.FIELD_OBSERVATIONS, 'Observations field', parentLayerParameterName=self.INPUT_TABLE, type=QgsProcessingParameterField.DataType.Any, optional=True))
         self.addParameter(QgsProcessingParameterCrs(self.OUTPUT_CRS, 'Output CRS', optional=False))
         self.addParameter(QgsProcessingParameterVectorDestination(self.OUTPUT_LINE, 'Output line layer'))
         self.addParameter(QgsProcessingParameterVectorDestination(self.OUTPUT_POINTS, 'Output points layer'))
@@ -60,9 +60,9 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
         
         # Create sinks for output layers
         (line_sink, line_dest_id) = self.parameterAsSink(parameters, self.OUTPUT_LINE, context,
-                                                         line_fields, QgsWkbTypes.LineString, output_crs)
+                                                         line_fields, QgsWkbTypes.Type.LineString, output_crs)
         (point_sink, point_dest_id) = self.parameterAsSink(parameters, self.OUTPUT_POINTS, context,
-                                                           point_fields, QgsWkbTypes.Point, output_crs)
+                                                           point_fields, QgsWkbTypes.Type.Point, output_crs)
 
         if line_sink is None or point_sink is None:
             raise QgsProcessingException(self.tr('Could not create output layers'))
@@ -77,7 +77,7 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
         if field_observations:
             initial_attributes.append('')
         initial_point.setAttributes(initial_attributes)
-        point_sink.addFeature(initial_point, QgsFeatureSink.FastInsert)
+        point_sink.addFeature(initial_point, QgsFeatureSink.Flag.FastInsert)
         
         features = source.getFeatures()
         total = 100.0 / source.featureCount() if source.featureCount() else 0
@@ -119,7 +119,7 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
                     obs_value = str(feature[field_observations] or '')
                     point_attributes.append(obs_value)
                 point_feature.setAttributes(point_attributes)
-                point_sink.addFeature(point_feature, QgsFeatureSink.FastInsert)
+                point_sink.addFeature(point_feature, QgsFeatureSink.Flag.FastInsert)
                 
                 # Create line segment
                 line_feature = QgsFeature(line_fields)
@@ -127,7 +127,7 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
                 length = line_geom.length()
                 line_feature.setGeometry(line_geom)
                 line_feature.setAttributes([float(length)])
-                line_sink.addFeature(line_feature, QgsFeatureSink.FastInsert)
+                line_sink.addFeature(line_feature, QgsFeatureSink.Flag.FastInsert)
                 
                 x_previous, y_previous = x_current, y_current
                 

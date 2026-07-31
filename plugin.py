@@ -48,7 +48,7 @@ class ArcGeekCalculator:
         try:
             dialog.exec()
         except AttributeError:
-            dialog.exec_()
+            dialog.exec()
 
     def run_screen_capture(self):
         run_screen_capture(self.iface)
@@ -202,20 +202,20 @@ class ArcGeekCalculator:
 
         current_node = self.iface.layerTreeView().currentNode()
         
-        if isinstance(current_node, QgsLayerTreeNode) and current_node.nodeType() == QgsLayerTreeNode.NodeLayer:
+        if isinstance(current_node, QgsLayerTreeNode) and current_node.nodeType() == QgsLayerTreeNode.NodeType.NodeLayer:
             layer = self.iface.layerTreeView().currentLayer()
-            if layer and layer.type() == QgsMapLayer.VectorLayer:
+            if layer and layer.type() == QgsMapLayer.LayerType.VectorLayer:
                 geometry_type = layer.geometryType()
 
-                if geometry_type == QgsWkbTypes.PointGeometry:
+                if geometry_type == QgsWkbTypes.GeometryType.PointGeometry:
                     action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_xy.png")), "Calculate XY Coordinates", menu)
                     action.triggered.connect(lambda: self.run_algorithm('coordinate')())
                     self.add_action_to_menu(menu, action)
-                elif geometry_type == QgsWkbTypes.LineGeometry:
+                elif geometry_type == QgsWkbTypes.GeometryType.LineGeometry:
                     action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_length.png")), "Calculate Length", menu)
                     action.triggered.connect(lambda: self.run_algorithm('line')())
                     self.add_action_to_menu(menu, action)
-                elif geometry_type == QgsWkbTypes.PolygonGeometry:
+                elif geometry_type == QgsWkbTypes.GeometryType.PolygonGeometry:
                     action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_area.png")), "Calculate Area and Perimeter", menu)
                     action.triggered.connect(lambda: self.run_algorithm('polygon')())
                     self.add_action_to_menu(menu, action)

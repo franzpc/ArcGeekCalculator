@@ -24,11 +24,11 @@ class WatershedAnalysisAlgorithm(QgsProcessingAlgorithm):
     def initAlgorithm(self, config=None):
         self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_DEM, 'Input DEM'))
         self.addParameter(QgsProcessingParameterNumber(self.THRESHOLD, 'Flow Accumulation Threshold', 
-                                                       type=QgsProcessingParameterNumber.Integer, minValue=0, defaultValue=5000))
+                                                       type=QgsProcessingParameterNumber.Type.Integer, minValue=0, defaultValue=5000))
         self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_ITERATIONS, 'Smooth Iterations',
-                                                       type=QgsProcessingParameterNumber.Integer, minValue=1, defaultValue=1))
+                                                       type=QgsProcessingParameterNumber.Type.Integer, minValue=1, defaultValue=1))
         self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_OFFSET, 'Smooth Offset',
-                                                       type=QgsProcessingParameterNumber.Double, minValue=0, maxValue=0.5, defaultValue=0.25))
+                                                       type=QgsProcessingParameterNumber.Type.Double, minValue=0, maxValue=0.5, defaultValue=0.25))
         self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_STREAMS, 'Stream Network'))
 
     def processAlgorithm(self, parameters, context, feedback):
@@ -108,7 +108,7 @@ class WatershedAnalysisAlgorithm(QgsProcessingAlgorithm):
             ordered_streams = self.calculate_stream_orders(smoothed_streams, context, feedback)
             
             stream_sink, stream_dest_id = self.parameterAsSink(parameters, self.OUTPUT_STREAMS, context,
-                                                               ordered_streams.fields(), QgsWkbTypes.LineString, dem.crs())
+                                                               ordered_streams.fields(), QgsWkbTypes.Type.LineString, dem.crs())
             if stream_sink is None:
                 raise QgsProcessingException(self.invalidSinkError(parameters, self.OUTPUT_STREAMS))
             
@@ -116,13 +116,13 @@ class WatershedAnalysisAlgorithm(QgsProcessingAlgorithm):
             for current, f in enumerate(ordered_streams.getFeatures()):
                 if feedback.isCanceled():
                     break
-                stream_sink.addFeature(f, QgsFeatureSink.FastInsert)
+                stream_sink.addFeature(f, QgsFeatureSink.Flag.FastInsert)
                 feedback.setProgress(int((current + 1) / feature_count * 100))
             
             return {self.OUTPUT_STREAMS: stream_dest_id}
         
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error in processAlgorithm: {str(e)}", level=Qgis.Critical)
+            QgsMessageLog.logMessage(f"Error in processAlgorithm: {str(e)}", level=Qgis.MessageLevel.Critical)
             raise
 
     def resample_dem(self, dem, new_cell_size, context, feedback):
@@ -144,7 +144,7 @@ class WatershedAnalysisAlgorithm(QgsProcessingAlgorithm):
 
             return QgsRasterLayer(output_path, 'resampled_dem', 'gdal')
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error in resample_dem: {str(e)}", level=Qgis.Critical)
+            QgsMessageLog.logMessage(f"Error in resample_dem: {str(e)}", level=Qgis.MessageLevel.Critical)
             raise
 
     def calculate_stream_orders(self, stream_layer, context, feedback):
@@ -185,7 +185,7 @@ class WatershedAnalysisAlgorithm(QgsProcessingAlgorithm):
             layer.commitChanges()
             return layer
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error in calculate_stream_orders: {str(e)}", level=Qgis.Critical)
+            QgsMessageLog.logMessage(f"Error in calculate_stream_orders: {str(e)}", level=Qgis.MessageLevel.Critical)
             raise
 
     def get_stream_orders(self, feature, layer, index):
@@ -206,7 +206,7 @@ class WatershedAnalysisAlgorithm(QgsProcessingAlgorithm):
                 layer.updateFeature(feature)
                 return strahler, shreve
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error in get_stream_orders: {str(e)}", level=Qgis.Critical)
+            QgsMessageLog.logMessage(f"Error in get_stream_orders: {str(e)}", level=Qgis.MessageLevel.Critical)
             raise
 
     def find_upstream_features(self, feature, index, layer):
@@ -219,7 +219,7 @@ class WatershedAnalysisAlgorithm(QgsProcessingAlgorithm):
             return [f for f in self.get_nearby_features(start_point, index, layer)
                     if f.id() != feature.id() and self.get_end_point(f.geometry()) == start_point]
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error in find_upstream_features: {str(e)}", level=Qgis.Critical)
+            QgsMessageLog.logMessage(f"Error in find_upstream_features: {str(e)}", level=Qgis.MessageLevel.Critical)
             return []
 
     def find_downstream_features(self, feature, index, layer):
@@ -232,14 +232,14 @@ class WatershedAnalysisAlgorithm(QgsProcessingAlgorithm):
             return [f for f in self.get_nearby_features(end_point, index, layer)
                     if f.id() != feature.id() and self.get_start_point(f.geometry()) == end_point]
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error in find_downstream_features: {str(e)}", level=Qgis.Critical)
+            QgsMessageLog.logMessage(f"Error in find_downstream_features: {str(e)}", level=Qgis.MessageLevel.Critical)
             return []
 
     def is_valid_feature(self, feature):
         return feature.geometry() is not None and not feature.geometry().isNull() and feature.geometry().isGeosValid()
 
     def get_start_point(self, geometry):
-        if geometry.type() == QgsWkbTypes.LineGeometry:
+        if geometry.type() == QgsWkbTypes.GeometryType.LineGeometry:
             return geometry.asPolyline()[0] if geometry.asPolyline() else None
         elif geometry.type() == QgsWkbTypes.MultiLineGeometry:
             lines = geometry.asMultiPolyline()
@@ -247,7 +247,7 @@ class WatershedAnalysisAlgorithm(QgsProcessingAlgorithm):
         return None
 
     def get_end_point(self, geometry):
-        if geometry.type() == QgsWkbTypes.LineGeometry:
+        if geometry.type() == QgsWkbTypes.GeometryType.LineGeometry:
             return geometry.asPolyline()[-1] if geometry.asPolyline() else None
         elif geometry.type() == QgsWkbTypes.MultiLineGeometry:
             lines = geometry.asMultiPolyline()

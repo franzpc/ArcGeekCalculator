@@ -16,7 +16,7 @@ class DamFloodSimulationAlgorithm(QgsProcessingAlgorithm):
 
     def initAlgorithm(self, config=None):
         self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_DEM, 'Input DEM'))
-        self.addParameter(QgsProcessingParameterNumber(self.WATER_LEVEL, 'Water Level (m)', type=QgsProcessingParameterNumber.Double, defaultValue=25))
+        self.addParameter(QgsProcessingParameterNumber(self.WATER_LEVEL, 'Water Level (m)', type=QgsProcessingParameterNumber.Type.Double, defaultValue=25))
         self.addParameter(QgsProcessingParameterExtent(self.STUDY_AREA, 'Study Area', optional=True))
         self.addParameter(QgsProcessingParameterRasterDestination(self.OUTPUT_RASTER, 'Output Water Depth Raster'))
 
@@ -54,7 +54,7 @@ class DamFloodSimulationAlgorithm(QgsProcessingAlgorithm):
         extent = dem_layer.extent()
 
         # Get DEM statistics
-        dem_stats = dem_layer.dataProvider().bandStatistics(1, QgsRasterBandStats.All)
+        dem_stats = dem_layer.dataProvider().bandStatistics(1, QgsRasterBandStats.Stats.All)
         dem_min = dem_stats.minimumValue
         dem_max = dem_stats.maximumValue
         feedback.pushInfo(f'DEM Min: {dem_min}, Max: {dem_max}')
@@ -74,7 +74,7 @@ class DamFloodSimulationAlgorithm(QgsProcessingAlgorithm):
         writer.setOutputFormat('GTiff')
 
         output_provider = writer.createOneBandRaster(
-            Qgis.Float32, width, height, extent, dem_layer.crs())
+            Qgis.DataType.Float32, width, height, extent, dem_layer.crs())
 
         if not output_provider.isValid():
             raise QgsProcessingException("Could not create raster output provider.")
@@ -85,7 +85,7 @@ class DamFloodSimulationAlgorithm(QgsProcessingAlgorithm):
 
         # Calculate water depth
         feedback.pushInfo('Calculating water depth...')
-        block = QgsRasterBlock(Qgis.Float32, width, 1)
+        block = QgsRasterBlock(Qgis.DataType.Float32, width, 1)
         total_volume = 0
         flooded_area = 0
         max_depth = 0

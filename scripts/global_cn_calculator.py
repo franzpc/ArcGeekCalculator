@@ -33,7 +33,7 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
         try:
             _poly_type = QgsProcessing.SourceType.TypeVectorPolygon
         except AttributeError:
-            _poly_type = QgsProcessing.TypeVectorPolygon
+            _poly_type = QgsProcessing.SourceType.TypeVectorPolygon
 
         self.addParameter(
             QgsProcessingParameterVectorLayer(
@@ -419,7 +419,7 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             try:
                 _all_stats = QgsRasterBandStats.Statistic.All
             except AttributeError:
-                _all_stats = QgsRasterBandStats.All
+                _all_stats = QgsRasterBandStats.Stats.All
             stats = provider.bandStatistics(1, _all_stats)
             
             mean_cn = stats.mean

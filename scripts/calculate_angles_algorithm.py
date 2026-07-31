@@ -16,7 +16,7 @@ class CalculateAnglesAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT,
                 self.tr('Input layer (line or polygon)'),
-                [QgsProcessing.TypeVectorLine, QgsProcessing.TypeVectorPolygon]
+                [QgsProcessing.SourceType.TypeVectorLine, QgsProcessing.SourceType.TypeVectorPolygon]
             )
         )
         
@@ -24,7 +24,7 @@ class CalculateAnglesAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterVectorDestination(
                 self.OUTPUT,
                 self.tr('Output vertices with angles'),
-                type=QgsProcessing.TypeVectorPoint
+                type=QgsProcessing.SourceType.TypeVectorPoint
             )
         )
 
@@ -41,7 +41,7 @@ class CalculateAnglesAlgorithm(QgsProcessingAlgorithm):
             self.OUTPUT,
             context,
             fields,
-            QgsWkbTypes.Point,
+            QgsWkbTypes.Type.Point,
             source.sourceCrs()
         )
 
@@ -56,7 +56,7 @@ class CalculateAnglesAlgorithm(QgsProcessingAlgorithm):
             geom = feature.geometry()
             feature_count += 1
 
-            if geom.type() == QgsWkbTypes.LineGeometry:
+            if geom.type() == QgsWkbTypes.GeometryType.LineGeometry:
                 # Process lines individually
                 points = self.process_line_feature(geom, feature_count)
                 for point in points:

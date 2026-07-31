@@ -14,7 +14,7 @@ class WeightedSumTool(QgsProcessingAlgorithm):
             QgsProcessingParameterMultipleLayers(
                 self.INPUT_RASTERS,
                 self.tr('Input rasters'),
-                QgsProcessing.TypeRaster
+                QgsProcessing.SourceType.TypeRaster
             )
         )
         self.addParameter(

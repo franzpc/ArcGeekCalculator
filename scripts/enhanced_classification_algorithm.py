@@ -161,7 +161,7 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.N_ESTIMATORS,
                 self.tr("Number of estimators (for Random Forest)"),
-                type=QgsProcessingParameterNumber.Integer,
+                type=QgsProcessingParameterNumber.Type.Integer,
                 defaultValue=300,
                 minValue=10,
                 maxValue=1000
@@ -172,7 +172,7 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.TEST_SIZE,
                 self.tr("Test set size (proportion)"),
-                type=QgsProcessingParameterNumber.Double,
+                type=QgsProcessingParameterNumber.Type.Double,
                 defaultValue=0.33,
                 minValue=0.1,
                 maxValue=0.5
@@ -193,7 +193,7 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.TRAINING_DATA,
                 self.tr("Training data points"),
-                [QgsProcessing.TypeVectorPoint],
+                [QgsProcessing.SourceType.TypeVectorPoint],
             )
         )
 
@@ -209,7 +209,7 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterRasterLayer(
                 self.SOURCE_IMAGE, 
                 self.tr("Multiband image to classify"), 
-                [QgsProcessing.TypeRaster]
+                [QgsProcessing.SourceType.TypeRaster]
             )
         )
 
@@ -366,7 +366,7 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
             try:
                 # Identify the raster values at the point for all bands
                 point = transform.transform(feature.geometry().asPoint())
-                results = provider.identify(point, QgsRaster.IdentifyFormatValue)
+                results = provider.identify(point, QgsRaster.IdentifyFormat.IdentifyFormatValue)
 
                 # Each sample contains: all band values first and the label last
                 if results.isValid():

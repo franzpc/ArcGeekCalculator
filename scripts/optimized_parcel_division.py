@@ -12,18 +12,18 @@ try:
     LINE_GEOMETRY = Qgis.GeometryType.Line
     POLYGON_GEOMETRY = Qgis.GeometryType.Polygon
 except AttributeError:
-    LINE_GEOMETRY = QgsWkbTypes.LineGeometry
-    POLYGON_GEOMETRY = QgsWkbTypes.PolygonGeometry
+    LINE_GEOMETRY = QgsWkbTypes.GeometryType.LineGeometry
+    POLYGON_GEOMETRY = QgsWkbTypes.GeometryType.PolygonGeometry
 
 try:
     MULTIPOLYGON_WKB = Qgis.WkbType.MultiPolygon
 except AttributeError:
-    MULTIPOLYGON_WKB = QgsWkbTypes.MultiPolygon
+    MULTIPOLYGON_WKB = QgsWkbTypes.Type.MultiPolygon
 
 try:
     JOIN_STYLE_ROUND = Qgis.JoinStyle.Round
 except AttributeError:
-    JOIN_STYLE_ROUND = QgsGeometry.JoinStyleRound
+    JOIN_STYLE_ROUND = QgsGeometry.JoinStyle.JoinStyleRound
 
 
 class OptimizedParcelDivisionAlgorithm(QgsProcessingAlgorithm):
@@ -38,18 +38,18 @@ class OptimizedParcelDivisionAlgorithm(QgsProcessingAlgorithm):
     REFERENCE_LINES = 'REFERENCE_LINES'
 
     def initAlgorithm(self, config=None):
-        self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT, self.tr('Input polygon layer'), [QgsProcessing.TypeVectorPolygon]))
-        self.addParameter(QgsProcessingParameterNumber(self.LOT_WIDTH, self.tr('Desired lot width'), QgsProcessingParameterNumber.Double, 10.0))
-        self.addParameter(QgsProcessingParameterNumber(self.TARGET_AREA, self.tr('Target lot area (0 = divide by width only)'), QgsProcessingParameterNumber.Double, 0.0, False, 0.0))
-        self.addParameter(QgsProcessingParameterNumber(self.MERGE_THRESHOLD, self.tr('Merge threshold (% of average area)'), QgsProcessingParameterNumber.Double, 30.0, False, 0.0, 100.0))
+        self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT, self.tr('Input polygon layer'), [QgsProcessing.SourceType.TypeVectorPolygon]))
+        self.addParameter(QgsProcessingParameterNumber(self.LOT_WIDTH, self.tr('Desired lot width'), QgsProcessingParameterNumber.Type.Double, 10.0))
+        self.addParameter(QgsProcessingParameterNumber(self.TARGET_AREA, self.tr('Target lot area (0 = divide by width only)'), QgsProcessingParameterNumber.Type.Double, 0.0, False, 0.0))
+        self.addParameter(QgsProcessingParameterNumber(self.MERGE_THRESHOLD, self.tr('Merge threshold (% of average area)'), QgsProcessingParameterNumber.Type.Double, 30.0, False, 0.0, 100.0))
         self.addParameter(QgsProcessingParameterEnum(self.REMAINDER_MODE, self.tr('Remainder distribution'),
                                                      options=[self.tr('Redistribute evenly (all lots equal width)'),
                                                               self.tr('Split between the two corner lots'),
                                                               self.tr('Place in the last lot')],
                                                      defaultValue=0))
-        self.addParameter(QgsProcessingParameterNumber(self.CORNER_WIDTH, self.tr('Corner lot width (0 = same as lot width)'), QgsProcessingParameterNumber.Double, 0.0, False, 0.0))
+        self.addParameter(QgsProcessingParameterNumber(self.CORNER_WIDTH, self.tr('Corner lot width (0 = same as lot width)'), QgsProcessingParameterNumber.Type.Double, 0.0, False, 0.0))
         self.addParameter(QgsProcessingParameterBoolean(self.TWO_ROWS, self.tr('Two rows of lots (split block along its centerline)'), defaultValue=True))
-        self.addParameter(QgsProcessingParameterFeatureSource(self.REFERENCE_LINES, self.tr('Frontage reference lines (optional)'), [QgsProcessing.TypeVectorLine], optional=True))
+        self.addParameter(QgsProcessingParameterFeatureSource(self.REFERENCE_LINES, self.tr('Frontage reference lines (optional)'), [QgsProcessing.SourceType.TypeVectorLine], optional=True))
         self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT, self.tr('Output divided parcels')))
 
     def processAlgorithm(self, parameters, context, feedback):
@@ -144,7 +144,7 @@ class OptimizedParcelDivisionAlgorithm(QgsProcessingAlgorithm):
                         out_feature = QgsFeature(fields)
                         out_feature.setAttributes(feature.attributes())
                         out_feature.setGeometry(piece)
-                        sink.addFeature(out_feature, QgsFeatureSink.FastInsert)
+                        sink.addFeature(out_feature, QgsFeatureSink.Flag.FastInsert)
                         lots_created += 1
 
             feedback.setProgress(int((current + 1) * total))

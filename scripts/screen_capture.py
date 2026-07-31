@@ -107,4 +107,4 @@ def run_screen_capture(iface):
     try:
         dialog.exec()
     except AttributeError:
-        dialog.exec_()
+        dialog.exec()

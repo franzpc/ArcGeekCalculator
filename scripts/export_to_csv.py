@@ -1,17 +1,5 @@
-# Qt5/Qt6 compatibility layer
-try:
-    from qgis.PyQt.QtCore import QCoreApplication, QVariant
-    QT_VERSION = "PyQt_via_QGIS"
-except ImportError:
-    try:
-        from PyQt6.QtCore import QCoreApplication, QVariant
-        QT_VERSION = "PyQt6"
-    except ImportError:
-        try:
-            from PyQt5.QtCore import QCoreApplication, QVariant
-            QT_VERSION = "PyQt5"
-        except ImportError:
-            raise ImportError("No compatible Qt version found. Please install PyQt5 or PyQt6.")
+# qgis.PyQt resolves to PyQt5 (Qt5) or PyQt6 (Qt6) depending on the QGIS build
+from qgis.PyQt.QtCore import QCoreApplication, QVariant
 
 from qgis.core import (QgsProcessing, QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,
@@ -31,7 +19,7 @@ class ExportToCSVAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT,
                 self.tr('Input layer'),
-                [QgsProcessing.TypeVector]
+                [QgsProcessing.SourceType.TypeVector]
             )
         )
         self.addParameter(
