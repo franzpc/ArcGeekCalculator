@@ -128,6 +128,9 @@ Every contribution, no matter how small, is greatly appreciated and helps ensure
 ## License
 This project is licensed under the GNU General Public License v2.0 or later. See the [LICENSE](LICENSE) file for details.
 
+### Third-party components
+The MCP server integration (`scripts/qgis_mcp.py`) is derived from [QGIS MCP](https://github.com/nkarasiak/qgis-mcp) by Nicolas Karasiak, distributed under the MIT License. The full notice is kept in [LICENSE-qgis-mcp](LICENSE-qgis-mcp). MIT is compatible with the GPL v2+ covering the rest of this plugin.
+
 ## Author
 ArcGeek - Franz Pucha-Cofrep
 
