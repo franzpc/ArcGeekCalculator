@@ -1,5 +1,5 @@
 # ArcGeek Calculator Plugin
-Version 4.1.9
+Version 4.2.0
 
 ## Description
 ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, 3D CAD integration, topographic profiling, machine learning classification, path optimization, and forestry planning in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, foresters, and anyone working with spatial data.
@@ -107,7 +107,7 @@ Config file location: `%APPDATA%\Claude\claude_desktop_config.json` (Windows) ·
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/nkarasiak/qgis-mcp",
+        "git+https://github.com/nkarasiak/qgis-mcp@v0.15.1",
         "qgis-mcp-server"
       ]
     }
@@ -129,12 +129,17 @@ Every contribution, no matter how small, is greatly appreciated and helps ensure
 This project is licensed under the GNU General Public License v2.0 or later. See the [LICENSE](LICENSE) file for details.
 
 ### Third-party components
-The MCP server integration (`scripts/qgis_mcp.py`) is derived from [QGIS MCP](https://github.com/nkarasiak/qgis-mcp) by Nicolas Karasiak, distributed under the MIT License. The full notice is kept in [LICENSE-qgis-mcp](LICENSE-qgis-mcp). MIT is compatible with the GPL v2+ covering the rest of this plugin.
+The MCP server (`scripts/qgis_mcp_server/`) is the plugin side of [QGIS MCP](https://github.com/nkarasiak/qgis-mcp) v0.15.1 by Nicolas Karasiak, licensed GPL v2 or later. See [LICENSE-qgis-mcp](LICENSE-qgis-mcp).
 
 ## Author
 ArcGeek - Franz Pucha-Cofrep
 
 ## Version History
+
+**4.2.0**:
+- QGIS 4 compatibility
+- MCP updated to qgis-mcp 0.15.1
+- Contour DXF export fixed
 
 **4.1.9**:
 - Watershed Morphometric Analysis: undefined parameters now write NULL instead of crashing (GitHub issue #20, reported by @valterhydrodynamics)
@@ -228,6 +233,6 @@ ArcGeek - Franz Pucha-Cofrep
 
 If you use ArcGeek Calculator in your research or projects, please cite it as follows:
 
-Pucha-Cofrep, F. (2026). ArcGeek Calculator (Version 4.1.9) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
+Pucha-Cofrep, F. (2026). ArcGeek Calculator (Version 4.2.0) [QGIS Plugin]. GitHub. https://github.com/franzpc/ArcGeekCalculator
 
 For in-text citations, you can use: (Pucha-Cofrep, 2026) for parenthetical citations or Pucha-Cofrep (2026) for narrative citations. The citation format follows the American Psychological Association Style 7th Edition (APA 7).

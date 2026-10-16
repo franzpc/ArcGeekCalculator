@@ -1,0 +1,1409 @@
+"""Handlers for the QGIS Processing framework: algorithms, models, analysis."""
+
+import contextlib
+import math
+import os
+import re
+import time
+from typing import ClassVar
+
+from qgis.core import (
+    QgsApplication,
+    QgsCoordinateTransform,
+    QgsCsException,
+    QgsEllipsoidUtils,
+    QgsMapLayer,
+    QgsMessageLog,
+    QgsPointXY,
+    QgsProcessingFeedback,
+    QgsProcessingModelAlgorithm,
+    QgsProcessingModelChildAlgorithm,
+    QgsProcessingModelChildParameterSource,
+    QgsProcessingModelOutput,
+    QgsProcessingModelParameter,
+    QgsProcessingParameterBoolean,
+    QgsProcessingParameterCrs,
+    QgsProcessingParameterDistance,
+    QgsProcessingParameterEnum,
+    QgsProcessingParameterExtent,
+    QgsProcessingParameterFeatureSource,
+    QgsProcessingParameterField,
+    QgsProcessingParameterFile,
+    QgsProcessingParameterMultipleLayers,
+    QgsProcessingParameterNumber,
+    QgsProcessingParameterPoint,
+    QgsProcessingParameterRasterLayer,
+    QgsProcessingParameterString,
+    QgsProcessingParameterVectorLayer,
+    QgsProject,
+)
+from qgis.PyQt.QtCore import QCoreApplication, QPointF
+
+from ..compat import (
+    LAYER_RASTER,
+    MSG_INFO,
+    MSG_WARNING,
+    PROC_ALG_NO_THREADING,
+    PROC_FILE_FOLDER,
+    PROC_NUM_INTEGER,
+    PROCESSING_OPTIONAL,
+)
+from ..errors import CommandError
+from ..registry import command
+
+# Reported errors reach the caller, so keep only the informative head of them.
+_MAX_TRACKED_ERRORS = 10
+_MAX_ERROR_LENGTH = 500
+
+
+class _CollectingFeedback(QgsProcessingFeedback):
+    """Processing feedback that keeps the errors an algorithm reports."""
+
+    def __init__(self):
+        super().__init__()
+        self.errors = []
+        self.error_count = 0
+
+    def reportError(self, error, fatalError=False):
+        # The GDAL providers shell out and surface a non-zero exit code only
+        # through here, never through the results dict, so keeping the messages
+        # is the only way a failed run can be described to the caller.
+        self.error_count += 1
+        if len(self.errors) < _MAX_TRACKED_ERRORS:
+            self.errors.append(str(error)[:_MAX_ERROR_LENGTH])
+        super().reportError(error, fatalError)
+
+
+class _ResponsiveFeedback(_CollectingFeedback):
+    """Processing feedback that keeps the GUI alive and enforces a deadline.
+
+    ``processing.run()`` is synchronous and, called straight from the server's
+    timer callback, blocks Qt's event loop for its whole duration - the QGIS
+    window freezes under the user's cursor, which defeats the point of driving a
+    live instance they can also touch. Pumping the event loop on each progress
+    report keeps the UI responsive and gives the algorithm a cancellation point.
+
+    Re-entrancy is safe: ``processEvents`` re-fires the server timer, but
+    ``_in_dispatch`` makes ``process_server`` return immediately, so no nested
+    command runs inside this one.
+
+    Caveat: algorithms that never report progress never reach these hooks, so
+    they can neither pump nor time out. Long raster work is better run with
+    GDAL outside the live instance.
+    """
+
+    # Pump at most this often; processEvents() on every progress tick of a fast
+    # algorithm costs more than the responsiveness it buys.
+    _PUMP_INTERVAL = 0.05  # seconds
+
+    def __init__(self, budget_seconds):
+        super().__init__()
+        self.budget = budget_seconds
+        self._deadline = time.monotonic() + budget_seconds
+        self._last_pump = 0.0
+        self.timed_out = False
+
+    def _tick(self):
+        now = time.monotonic()
+        if now >= self._deadline:
+            self.timed_out = True
+            self.cancel()
+            return
+        if now - self._last_pump >= self._PUMP_INTERVAL:
+            self._last_pump = now
+            QCoreApplication.processEvents()
+
+    def setProgress(self, progress):
+        self._tick()
+        super().setProgress(progress)
+
+    def pushInfo(self, info):
+        self._tick()
+        super().pushInfo(info)
+
+
+def _error_detail(feedback):
+    """The errors an algorithm reported, joined whole, as a message suffix.
+
+    Only the feedback carries them (the GDAL providers never raise), and the
+    first stderr line is often a harmless warning with the exit code last.
+    """
+    return f": {'; '.join(feedback.errors)}" if feedback.errors else ""
+
+
+def _warnings(feedback):
+    """Non-fatal errors of a run that produced its outputs, as response keys.
+
+    A run under the Processing setting "Skip invalid features" succeeds while
+    dropping every feature with an invalid geometry; the skips reach only the
+    feedback, so a join came back with most targets unmatched and no word
+    why (#52). warning_count is the total; warnings keeps the first few.
+    """
+    if not feedback.errors:
+        return {}
+    return {"warnings": feedback.errors, "warning_count": feedback.error_count}
+
+
+def _output_value(value):
+    """A processing output as JSON: numbers stay numbers, layers become ids.
+
+    str() turned 123.4 into "123.4", None into "None", and a TEMPORARY_OUTPUT
+    layer into its repr - a layer that is gone once the call returns.
+    """
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, (list, tuple)):
+        return [_output_value(v) for v in value]
+    if isinstance(value, QgsMapLayer):
+        out = {"id": value.id(), "name": value.name()}
+        if QgsProject.instance().mapLayer(value.id()) is None:
+            # Not in the project: dropped when this call returns.
+            out["discarded"] = True
+            out["hint"] = "Pass an output file path (or load_results=True) to keep it"
+        return out
+    return str(value)
+
+
+class ProcessingHandlers:
+    """Processing algorithms, models and the analysis commands built on them."""
+
+    # Below the client's TIMEOUT_LONG (60s) so the plugin gives up - and says
+    # why - before the client abandons the request and leaves QGIS still working.
+    _PROCESSING_TIMEOUT = 55
+
+    # Output values that name no file on disk, so there is nothing to verify.
+    _NON_FILE_OUTPUTS: ClassVar[tuple] = (
+        "TEMPORARY_OUTPUT",
+        "memory:",
+        "ogr:",
+        "postgres:",
+        "postgresql:",
+        "mssql:",
+    )
+
+    def _run_alg_with_warnings(self, algorithm, parameters):
+        """_run_alg, plus the non-fatal errors it reported as response keys (#52)."""
+        feedback = _ResponsiveFeedback(self._PROCESSING_TIMEOUT)
+        return self._run_alg(algorithm, parameters, feedback), _warnings(feedback)
+
+    def _run_alg(self, algorithm, parameters, feedback=None, load=False, context=None):
+        """Run *algorithm*, raising when it did not actually produce its output.
+
+        ``processing.run()`` returns an algorithm's declared outputs whether or
+        not the run succeeded. The GDAL providers shell out and report a
+        non-zero exit code only through the feedback object, so a command that
+        wrote nothing still comes back as ``{"OUTPUT": "/path/never/written"}``
+        and the caller builds on a file that does not exist. Checking the
+        caller's own output paths catches that for every provider without
+        parsing anyone's error text, which is translated and provider-specific.
+
+        ``load=True`` swaps in ``processing.runAndLoadResults`` so the outputs
+        are added to the project. That helper rewrites the destination entries
+        of *parameters* in place (into ``QgsProcessingOutputLayerDefinition``),
+        which would turn the output check below into a no-op, so the check runs
+        against a snapshot taken before the run.
+        """
+        import processing
+
+        if feedback is None:
+            feedback = _ResponsiveFeedback(self._PROCESSING_TIMEOUT)
+        declared = dict(parameters)
+        existing = self._output_files_before(algorithm, declared)
+        runner = processing.runAndLoadResults if load else processing.run
+        timeout_message = (
+            f"Processing cancelled after {feedback.budget:g}s. Pass a larger 'timeout', "
+            "or run heavy raster work with GDAL outside QGIS."
+        )
+        try:
+            result = runner(algorithm, parameters, feedback=feedback, context=context)
+        except Exception as e:
+            if feedback.timed_out:
+                raise CommandError(timeout_message) from e
+            # processing.run raises a generic "There were errors executing the
+            # algorithm."; the reason the algorithm gave went to the feedback.
+            raise CommandError(f"Processing error: {e!s}{_error_detail(feedback)}") from e
+        finally:
+            # Also puts back the real mtime of every file the run left alone.
+            stale = self._unchanged_outputs(existing)
+        if feedback.timed_out:
+            raise CommandError(timeout_message)
+        failure = self._output_failure(algorithm, declared, stale, feedback)
+        if failure:
+            raise CommandError(failure)
+        return result
+
+    def _output_failure(self, algorithm, declared, stale, feedback):
+        """Why a run that reported success did not produce its outputs, or None."""
+        missing = self._missing_outputs(algorithm, declared)
+        if missing:
+            return (
+                f"{algorithm} reported success but wrote no {', '.join(missing)}"
+                f"{_error_detail(feedback)}"
+            )
+        if stale:
+            return (
+                f"{algorithm} reported success but left {', '.join(stale)} unchanged "
+                f"(a file from before this run){_error_detail(feedback)}"
+            )
+        return None
+
+    @staticmethod
+    def _check_ellipsoid(ellipsoid):
+        """Raise unless *ellipsoid* is one QGIS knows (or 'NONE')."""
+        known = QgsEllipsoidUtils.ellipsoidParameters(ellipsoid).valid
+        # QGIS reports 'NONE' as invalid, but it is the planimetric setting.
+        if not known and ellipsoid.upper() != "NONE":
+            raise CommandError(
+                f"Unknown ellipsoid: {ellipsoid}. Use 'EPSG:7030' or 'WGS84' for "
+                "WGS 84, another ellipsoid acronym, or 'NONE' for planimetric "
+                "measurements."
+            )
+
+    @classmethod
+    def _ellipsoid_context(cls, ellipsoid, feedback):
+        """A processing context measuring on *ellipsoid*, or None for the default.
+
+        Without one the project's ellipsoid applies, and an area asked for on
+        WGS84 comes back measured on whatever the project uses. createContext is
+        what processing.run builds when given no context (project, invalid-
+        geometry setting, units), so only the ellipsoid differs from a default run.
+        """
+        if ellipsoid is None:
+            return None
+        cls._check_ellipsoid(ellipsoid)
+        from processing.tools import dataobjects
+
+        context = dataobjects.createContext(feedback)
+        context.setEllipsoid(ellipsoid)
+        return context
+
+    def _output_paths(self, algorithm, parameters):
+        """The plain filesystem paths among *algorithm*'s destination parameters."""
+        from qgis.core import QgsProcessingDestinationParameter
+
+        alg = algorithm
+        if isinstance(alg, str):
+            alg = QgsApplication.processingRegistry().algorithmById(alg)
+        if alg is None:
+            return []
+
+        paths = []
+        for param in alg.parameterDefinitions():
+            if not isinstance(param, QgsProcessingDestinationParameter):
+                continue
+            value = parameters.get(param.name())
+            if not isinstance(value, str) or not value:
+                continue
+            path = value.split("|", 1)[0]
+            if "://" in path or path.startswith(self._NON_FILE_OUTPUTS):
+                continue
+            parent = os.path.dirname(path)
+            # A parent that does not exist means this is not a plain filesystem
+            # path after all (a provider uri, a layer name), so leave it alone
+            # rather than call the run failed on a guess.
+            if parent and not os.path.isdir(parent):
+                continue
+            paths.append(path)
+        return paths
+
+    def _missing_outputs(self, algorithm, parameters):
+        """Output paths the caller asked for that are not on disk after the run."""
+        return [p for p in self._output_paths(algorithm, parameters) if not os.path.exists(p)]
+
+    def _output_files_before(self, algorithm, parameters):
+        """(mtime, size) of each output file that already exists, before a run.
+
+        A failed GDAL run leaves a file from an earlier run in place (on
+        Windows a locked one cannot even be replaced), and "the file exists"
+        then passed for "the run wrote it". Folders are left out: overwriting
+        files inside one does not change its own mtime.
+
+        Each file is backdated 10 s first: on a coarse clock (FAT32 keeps 2 s,
+        some SMB shares more) a fast rerun writing the same bytes would
+        otherwise keep the old stamp and read as untouched. _unchanged_outputs
+        puts the real stamp back on each file the run did not write.
+        """
+        state = {}
+        for path in self._output_paths(algorithm, parameters):
+            if os.path.isfile(path):
+                st = original = os.stat(path)
+                with contextlib.suppress(OSError):
+                    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns - 10_000_000_000))
+                    st = os.stat(path)
+                state[path] = ((st.st_mtime_ns, st.st_size), original)
+        return state
+
+    @staticmethod
+    def _unchanged_outputs(before):
+        """Files from *before* that the run did not touch, their mtime restored."""
+        unchanged = []
+        for path, (stamp, original) in before.items():
+            if os.path.isfile(path):
+                st = os.stat(path)
+                if (st.st_mtime_ns, st.st_size) == stamp:
+                    unchanged.append(path)
+                    with contextlib.suppress(OSError):
+                        os.utime(path, ns=(original.st_atime_ns, original.st_mtime_ns))
+        return unchanged
+
+    @command
+    def execute_processing(
+        self, algorithm, parameters, timeout=None, load_results=False, ellipsoid=None, **kwargs
+    ):
+        try:
+            QgsMessageLog.logMessage(f"Processing: {algorithm}", self.LOG_TAG, MSG_INFO)
+            budget = self._PROCESSING_TIMEOUT if timeout is None else float(timeout)
+            feedback = _ResponsiveFeedback(budget)
+            context = self._ellipsoid_context(ellipsoid, feedback)
+            project = QgsProject.instance()
+            before = set(project.mapLayers()) if load_results else ()
+            result = self._run_alg(
+                algorithm, parameters, feedback, load=load_results, context=context
+            )
+            response = {
+                "algorithm": algorithm,
+                "result": {k: _output_value(v) for k, v in result.items()},
+            }
+            if load_results:
+                # Which layers appeared is the provider-agnostic answer: only
+                # sink/vector/raster destinations are loaded, and the name QGIS
+                # gives them is not the caller's output value.
+                response["loaded_layers"] = [
+                    {"id": lid, "name": layer.name()}
+                    for lid, layer in project.mapLayers().items()
+                    if lid not in before
+                ]
+            # The outputs are there, so this is not a failure - but GDAL writes
+            # real warnings to stderr and swallowing them is what made a
+            # silently failed run so hard to see.
+            response.update(_warnings(feedback))
+            return response
+        except CommandError:
+            # Already a deliberate, user-facing message (the timeout above).
+            # Re-wrapping it produced "Processing error: Processing cancelled
+            # after 55s...", which reads like the timeout was itself a failure.
+            raise
+        except Exception as e:
+            raise CommandError(f"Processing error: {e!s}") from e
+
+    # Finished jobs kept for get_processing_job; the oldest are dropped first.
+    _MAX_JOBS = 50
+
+    @command
+    def start_processing_job(
+        self, algorithm, parameters, load_results=False, ellipsoid=None, **kwargs
+    ):
+        """Run *algorithm* as a QGIS background task, with no deadline.
+
+        QgsProcessingAlgRunnerTask is what the Processing toolbox itself runs:
+        the algorithm works on a thread of its own, so QGIS stays usable and
+        this socket keeps answering while it does. Outputs are verified, and
+        loaded if asked, on the main thread when it finishes (_finish_job).
+        """
+        from processing.tools import dataobjects
+        from qgis.core import (
+            QgsProcessingAlgRunnerTask,
+            QgsProcessingOutputLayerDefinition,
+            QgsProcessingParameterFeatureSink,
+            QgsProcessingParameterRasterDestination,
+            QgsProcessingParameterVectorDestination,
+        )
+
+        alg = QgsApplication.processingRegistry().algorithmById(algorithm)
+        if alg is None:
+            raise CommandError(f"Algorithm not found: {algorithm}")
+        if alg.flags() & PROC_ALG_NO_THREADING:
+            raise CommandError(
+                f"{algorithm} must run on QGIS's main thread, so it cannot be a "
+                "background job. Use execute_processing."
+            )
+        feedback = _CollectingFeedback()
+        context = self._ellipsoid_context(ellipsoid, feedback) or dataobjects.createContext(
+            feedback
+        )
+        project = QgsProject.instance()
+        # The destinations processing.runAndLoadResults would load.
+        loadable = (
+            QgsProcessingParameterFeatureSink,
+            QgsProcessingParameterVectorDestination,
+            QgsProcessingParameterRasterDestination,
+        )
+        run_parameters = dict(parameters)
+        for param in alg.destinationParameterDefinitions():
+            value = run_parameters.get(param.name())
+            if value is None and not param.flags() & PROCESSING_OPTIONAL:
+                value = run_parameters[param.name()] = "TEMPORARY_OUTPUT"
+            if not isinstance(value, str):
+                continue
+            if load_results and isinstance(param, loadable):
+                run_parameters[param.name()] = QgsProcessingOutputLayerDefinition(value, project)
+            elif value.startswith(("TEMPORARY_OUTPUT", "memory:")) and isinstance(
+                param, QgsProcessingParameterFeatureSink
+            ):
+                # A temporary sink is a memory layer, gone with the job; a
+                # temporary file output stays on disk, so it is left alone.
+                raise CommandError(
+                    f"{param.name()} is a temporary output, which a background job "
+                    "discards when it ends. Pass load_results=True or an output path."
+                )
+        ok, message = alg.checkParameterValues(run_parameters, context)
+        if not ok:
+            raise CommandError(f"{algorithm}: {message}")
+
+        declared = dict(parameters)
+        task = QgsProcessingAlgRunnerTask(alg, run_parameters, context, feedback)
+        job = {
+            "id": f"job{next(self._job_ids)}",
+            "algorithm": algorithm,
+            "state": "running",
+            "started": time.monotonic(),
+            "parameters": declared,
+            "load_results": load_results,
+            "ellipsoid": ellipsoid,
+            "existing": self._output_files_before(algorithm, declared),
+            # Held for as long as the job is listed: the task only references
+            # the context and feedback, and Python would free them under it.
+            "task": task,
+            "context": context,
+            "feedback": feedback,
+        }
+        task.executed.connect(lambda ok, results: self._finish_job(job, ok, results))
+        self._jobs[job["id"]] = job
+        finished = [jid for jid, j in self._jobs.items() if j["state"] != "running"]
+        for jid in finished[: max(0, len(self._jobs) - self._MAX_JOBS)]:
+            del self._jobs[jid]
+        QgsApplication.taskManager().addTask(task)
+        QgsMessageLog.logMessage(f"Background job {job['id']}: {algorithm}", self.LOG_TAG, MSG_INFO)
+        return self._job_summary(job)
+
+    def _finish_job(self, job, ok, results):
+        """Verify and load a finished job's outputs. Runs on the main thread.
+
+        Called from a Qt signal, where an exception would land in QGIS's Python
+        error dialog, so every failure is recorded on the job instead.
+        """
+        feedback = job["feedback"]
+        algorithm = job["algorithm"]
+        job["elapsed"] = round(time.monotonic() - job["started"], 1)
+        try:
+            stale = self._unchanged_outputs(job["existing"])
+            if not ok:
+                cancelled = feedback.isCanceled()
+                job["state"] = "cancelled" if cancelled else "failed"
+                job["error"] = (
+                    "Cancelled" if cancelled else f"Processing failed{_error_detail(feedback)}"
+                )
+                return
+            failure = self._output_failure(algorithm, job["parameters"], stale, feedback)
+            if failure:
+                job.update(state="failed", error=failure)
+                return
+            loaded = self._load_job_outputs(job["context"], feedback) if job["load_results"] else []
+            job.update(
+                state="succeeded",
+                result={k: _output_value(v) for k, v in results.items()},
+                **_warnings(feedback),
+            )
+            if loaded:
+                job["loaded_layers"] = loaded
+            # Journaled only now, and as the blocking command: a replay has to
+            # finish the run before anything that used its outputs, and the
+            # budget leaves room for a slower machine.
+            params = {
+                "algorithm": algorithm,
+                "parameters": job["parameters"],
+                "timeout": max(self._PROCESSING_TIMEOUT, math.ceil(job["elapsed"] * 2)),
+            }
+            if job["load_results"]:
+                params["load_results"] = True
+            if job["ellipsoid"] is not None:
+                params["ellipsoid"] = job["ellipsoid"]
+            self._record("execute_processing", params, [(lyr["id"], lyr["name"]) for lyr in loaded])
+        except Exception as e:
+            job.update(state="failed", error=f"Could not finish the job: {e!s}")
+            QgsMessageLog.logMessage(
+                f"Background job {job['id']} failed to finish: {e!r}", self.LOG_TAG, MSG_WARNING
+            )
+
+    @staticmethod
+    def _load_job_outputs(context, feedback):
+        """Move a job's layer outputs into the project, as runAndLoadResults does."""
+        from qgis.core import QgsProcessingUtils
+
+        project = QgsProject.instance()
+        store = context.temporaryLayerStore()
+        loaded = []
+        for layer_ref, details in context.layersToLoadOnCompletion().items():
+            # A file output is opened here; a temporary one is already in the store.
+            layer = QgsProcessingUtils.mapLayerFromString(layer_ref, context)
+            if layer is None:
+                continue
+            if store.mapLayer(layer.id()) is not None:
+                store.takeMapLayer(layer)
+            details.setOutputLayerName(layer)
+            project.addMapLayer(layer)
+            if details.postProcessor() is not None:
+                details.postProcessor().postProcessLayer(layer, context, feedback)
+            loaded.append({"id": layer.id(), "name": layer.name()})
+        return loaded
+
+    @staticmethod
+    def _job_summary(job):
+        summary = {key: job[key] for key in ("id", "algorithm", "state")}
+        if job["state"] == "running":
+            summary["progress"] = round(job["feedback"].progress(), 1)
+            summary["elapsed"] = round(time.monotonic() - job["started"], 1)
+        for key in ("elapsed", "result", "error", "loaded_layers", "warnings", "warning_count"):
+            if key in job:
+                summary[key] = job[key]
+        return summary
+
+    def _job(self, job_id):
+        job = self._jobs.get(job_id)
+        if job is None:
+            known = ", ".join(self._jobs) or "none"
+            raise CommandError(f"No processing job {job_id!r}. Known jobs: {known}")
+        return job
+
+    @command
+    def get_processing_job(self, job_id=None, **kwargs):
+        """One job's state and, once finished, its result or error; every job without an id."""
+        if job_id is None:
+            jobs = [self._job_summary(job) for job in self._jobs.values()]
+            return {"jobs": jobs, "count": len(jobs)}
+        return self._job_summary(self._job(job_id))
+
+    @command
+    def cancel_processing_job(self, job_id, **kwargs):
+        """Ask a running job to stop; its state turns 'cancelled' once QGIS has stopped it."""
+        job = self._job(job_id)
+        if job["state"] == "running":
+            # The task is QGIS's, deleted once finished; state says it is not yet.
+            with contextlib.suppress(RuntimeError):
+                job["task"].cancel()
+        return self._job_summary(job)
+
+    @command
+    def list_processing_algorithms(self, search=None, provider=None, **kwargs):
+        registry = QgsApplication.processingRegistry()
+        algorithms = []
+
+        for alg in registry.algorithms():
+            if provider and alg.provider().id() != provider:
+                continue
+            if search:
+                search_lower = search.lower()
+                in_id = search_lower in alg.id().lower()
+                in_name = search_lower in alg.displayName().lower()
+                if not in_id and not in_name:
+                    continue
+            algorithms.append(
+                {
+                    "id": alg.id(),
+                    "name": alg.displayName(),
+                    "provider": alg.provider().id(),
+                }
+            )
+
+        return {"algorithms": algorithms, "count": len(algorithms)}
+
+    @command
+    def get_algorithm_help(self, algorithm_id, **kwargs):
+        registry = QgsApplication.processingRegistry()
+        alg = registry.algorithmById(algorithm_id)
+        if not alg:
+            raise CommandError(f"Algorithm not found: {algorithm_id}")
+
+        params = []
+        for param in alg.parameterDefinitions():
+            param_info = {
+                "name": param.name(),
+                "description": param.description(),
+                "type": param.type(),
+                "optional": bool(param.flags() & PROCESSING_OPTIONAL),
+            }
+            with contextlib.suppress(Exception):
+                default = param.defaultValue()
+                if default is not None:
+                    param_info["default"] = str(default)
+            params.append(param_info)
+
+        outputs = []
+        for out in alg.outputDefinitions():
+            outputs.append(
+                {
+                    "name": out.name(),
+                    "description": out.description(),
+                    "type": out.type(),
+                }
+            )
+
+        return {
+            "id": alg.id(),
+            "name": alg.displayName(),
+            "description": alg.shortDescription() or "",
+            "provider": alg.provider().id(),
+            "parameters": params,
+            "outputs": outputs,
+        }
+
+    def _resolve_algorithm_id(self, hint, registry):
+        """Resolve an algorithm hint to a fully-qualified id (e.g. 'native:buffer').
+
+        Direct lookup against ``QgsApplication.processingRegistry()``: the LLM
+        passes a keyword like ``"buffer"`` or a full id, and this matches it
+        against algorithm ids, display names and tags. Falls back with a
+        candidate list when the hint is ambiguous, so the caller can refine.
+        """
+        if not isinstance(hint, str) or not hint.strip():
+            raise CommandError("Algorithm hint must be a non-empty string")
+        hint_clean = hint.strip()
+
+        # 1. Exact id match (incl. fully qualified 'native:buffer').
+        alg = registry.algorithmById(hint_clean)
+        if alg is not None:
+            return alg.id()
+
+        hint_lower = hint_clean.lower()
+        exact_name = []  # display name == hint
+        suffix_id = []  # id suffix == hint (after ':')
+        contains = []  # display name or id suffix contains hint
+        for alg in registry.algorithms():
+            alg_id = alg.id()
+            id_suffix = alg_id.split(":", 1)[-1].lower()
+            disp = alg.displayName().lower()
+            if disp == hint_lower:
+                exact_name.append(alg)
+            elif id_suffix == hint_lower:
+                suffix_id.append(alg)
+            elif hint_lower in disp or hint_lower in id_suffix:
+                contains.append(alg)
+
+        def _pick(group):
+            if len(group) == 1:
+                return group[0].id()
+            natives = [a for a in group if a.provider().id() == "native"]
+            if len(natives) == 1:
+                return natives[0].id()
+            return None
+
+        for group in (exact_name, suffix_id, contains):
+            picked = _pick(group)
+            if picked:
+                return picked
+
+        all_candidates = exact_name + suffix_id + contains
+        if not all_candidates:
+            raise CommandError(
+                f"No Processing algorithm matches '{hint_clean}'. "
+                "Pass a keyword found in the algorithm name or its full id (e.g. 'native:buffer')."
+            )
+        # Show up to 8 candidates so the LLM can disambiguate next call.
+        sample = ", ".join(
+            f"{a.id()} ({a.displayName()})"
+            for a in sorted(
+                all_candidates, key=lambda a: (a.provider().id() != "native", len(a.id()))
+            )[:8]
+        )
+        raise CommandError(
+            f"Algorithm hint '{hint_clean}' is ambiguous. Candidates: {sample}. Use the full id."
+        )
+
+    def _build_param_source(self, value, defined_inputs, defined_steps):
+        """Convert a JSON-friendly value into a QgsProcessingModelChildParameterSource.
+
+        String prefixes:
+          @name          -> reference to model input parameter
+          $step.OUTPUT   -> reference to a previous step's output
+          =expression    -> evaluated QGIS expression
+        Lists are converted element-wise; everything else becomes a static value.
+        """
+        Src = QgsProcessingModelChildParameterSource
+
+        if isinstance(value, list):
+            return [self._build_param_source(v, defined_inputs, defined_steps)[0] for v in value]
+
+        if isinstance(value, str):
+            if value.startswith("@"):
+                ref = value[1:]
+                if ref not in defined_inputs:
+                    raise CommandError(
+                        f"Parameter reference '{value}' points to undefined model input '{ref}'"
+                    )
+                return [Src.fromModelParameter(ref)]
+            if value.startswith("$"):
+                rest = value[1:]
+                if "." not in rest:
+                    raise CommandError(
+                        f"Step output reference '{value}' must be in '$step_id.OUTPUT_NAME' form"
+                    )
+                child_id, output_name = rest.split(".", 1)
+                if child_id not in defined_steps:
+                    raise CommandError(
+                        f"Step output reference '{value}' points to undefined step '{child_id}'"
+                    )
+                return [Src.fromChildOutput(child_id, output_name)]
+            if value.startswith("="):
+                return [Src.fromExpression(value[1:])]
+
+        return [Src.fromStaticValue(value)]
+
+    # Spelling variants the tool documents, mapped onto one canonical name each,
+    # so the builder tables below carry one row per actual parameter type.
+    _INPUT_ALIASES: ClassVar[dict] = {
+        "vector_layer": "vector",
+        "source": "feature_source",
+        "raster_layer": "raster",
+        "int": "integer",
+        "float": "number",
+        "double": "number",
+        "bool": "boolean",
+        "layers": "multiple_layers",
+    }
+
+    # Types built by the common ``Class(name, description, defaultValue=...)``
+    # signature. Anything needing more than that gets a builder method below.
+    _INPUT_CLASSES: ClassVar[dict] = {
+        "vector": QgsProcessingParameterVectorLayer,
+        "feature_source": QgsProcessingParameterFeatureSource,
+        "raster": QgsProcessingParameterRasterLayer,
+        "number": QgsProcessingParameterNumber,
+        "string": QgsProcessingParameterString,
+        "extent": QgsProcessingParameterExtent,
+        "point": QgsProcessingParameterPoint,
+        "file": QgsProcessingParameterFile,
+        "multiple_layers": QgsProcessingParameterMultipleLayers,
+    }
+
+    # Builders are stored by name and resolved with getattr: a staticmethod
+    # object is not callable on Python 3.9, which QGIS still bundles.
+    _INPUT_BUILDERS: ClassVar[dict] = {
+        "field": "_input_field",
+        "integer": "_input_integer",
+        "distance": "_input_distance",
+        "boolean": "_input_boolean",
+        "crs": "_input_crs",
+        "folder": "_input_folder",
+        "enum": "_input_enum",
+    }
+
+    @staticmethod
+    def _input_field(name, description, default, spec):
+        parent = spec.get("parent_layer")
+        if not parent:
+            raise CommandError(f"Input '{name}' of type 'field' requires 'parent_layer'")
+        return QgsProcessingParameterField(
+            name, description, parentLayerParameterName=parent, defaultValue=default
+        )
+
+    @staticmethod
+    def _input_integer(name, description, default, spec):
+        param = QgsProcessingParameterNumber(name, description, defaultValue=default)
+        with contextlib.suppress(AttributeError):
+            param.setDataType(PROC_NUM_INTEGER)
+        return param
+
+    @staticmethod
+    def _input_distance(name, description, default, spec):
+        param = QgsProcessingParameterDistance(name, description, defaultValue=default)
+        parent = spec.get("parent_layer")
+        if parent:
+            param.setParentParameterName(parent)
+        return param
+
+    @staticmethod
+    def _input_boolean(name, description, default, spec):
+        return QgsProcessingParameterBoolean(
+            name, description, defaultValue=bool(default) if default is not None else False
+        )
+
+    @staticmethod
+    def _input_crs(name, description, default, spec):
+        return QgsProcessingParameterCrs(name, description, defaultValue=default or "EPSG:4326")
+
+    @staticmethod
+    def _input_folder(name, description, default, spec):
+        param = QgsProcessingParameterFile(name, description, defaultValue=default)
+        with contextlib.suppress(AttributeError):
+            param.setBehavior(PROC_FILE_FOLDER)
+        return param
+
+    @staticmethod
+    def _input_enum(name, description, default, spec):
+        return QgsProcessingParameterEnum(
+            name, description, options=spec.get("options") or [], defaultValue=default
+        )
+
+    def _make_input_definition(self, spec):
+        """Build a QgsProcessingParameterDefinition from a JSON spec dict."""
+        raw_type = (spec.get("type") or "string").lower()
+        type_name = self._INPUT_ALIASES.get(raw_type, raw_type)
+        name = spec["name"]
+        description = spec.get("description", name)
+        default = spec.get("default", None)
+
+        builder = self._INPUT_BUILDERS.get(type_name)
+        param_class = self._INPUT_CLASSES.get(type_name)
+        if builder is not None:
+            param = getattr(self, builder)(name, description, default, spec)
+        elif param_class is not None:
+            param = param_class(name, description, defaultValue=default)
+        else:
+            raise CommandError(f"Unsupported input type '{raw_type}' for input '{name}'")
+
+        if spec.get("optional"):
+            with contextlib.suppress(Exception):
+                param.setFlags(param.flags() | PROCESSING_OPTIONAL)
+        return param
+
+    def _resolve_model_steps(self, steps, registry):
+        """Validate each step spec and pair it with its resolved algorithm id.
+
+        Done up front, before anything is built, so a bad step never leaves a
+        half-written model file behind.
+        """
+        resolved = []  # (step_spec, resolved_alg_id)
+        seen_ids = set()
+        for idx, step in enumerate(steps):
+            if not isinstance(step, dict):
+                raise CommandError(f"Step #{idx} must be a dict")
+            for required in ("id", "algorithm"):
+                if required not in step:
+                    raise CommandError(f"Step #{idx} missing required key '{required}'")
+            if step["id"] in seen_ids:
+                raise CommandError(f"Duplicate step id '{step['id']}'")
+            seen_ids.add(step["id"])
+            try:
+                alg_id = self._resolve_algorithm_id(step["algorithm"], registry)
+            except Exception as e:
+                raise CommandError(f"Step '{step['id']}': {e}") from e
+            alg = registry.algorithmById(alg_id)
+            valid_params = {p.name() for p in alg.parameterDefinitions()}
+            for pname in step.get("parameters") or {}:
+                if pname not in valid_params:
+                    raise CommandError(
+                        f"Step '{step['id']}' (algorithm '{alg_id}'): unknown parameter "
+                        f"'{pname}'. Valid parameters: {sorted(valid_params)}"
+                    )
+            resolved.append((step, alg_id))
+        return resolved
+
+    def _model_outputs_by_step(self, outputs, resolved, registry):
+        """Validate the declared final outputs and group them by step id."""
+        outputs_by_step = {}
+        step_id_to_alg = {step["id"]: alg_id for step, alg_id in resolved}
+        for out_idx, out_spec in enumerate(outputs or []):
+            if not isinstance(out_spec, dict):
+                raise CommandError(f"Output #{out_idx} must be a dict")
+            for required in ("name", "from_step", "from_output"):
+                if required not in out_spec:
+                    raise CommandError(f"Output #{out_idx} missing required key '{required}'")
+            from_step = out_spec["from_step"]
+            if from_step not in step_id_to_alg:
+                raise CommandError(
+                    f"Output '{out_spec['name']}': from_step '{from_step}' is not a defined step"
+                )
+            from_alg = registry.algorithmById(step_id_to_alg[from_step])
+            valid_outputs = {o.name() for o in from_alg.outputDefinitions()}
+            if out_spec["from_output"] not in valid_outputs:
+                raise CommandError(
+                    f"Output '{out_spec['name']}': '{out_spec['from_output']}' is not an output "
+                    f"of step '{from_step}' (algorithm '{step_id_to_alg[from_step]}'). "
+                    f"Valid outputs: {sorted(valid_outputs)}"
+                )
+            outputs_by_step.setdefault(from_step, {})[out_spec["name"]] = out_spec
+        return outputs_by_step
+
+    def _expose_last_output(self, model, registry, last_step_id):
+        """Publish the last step's OUTPUT under a default name.
+
+        Called when the caller declared no outputs, so that the model still
+        produces something they can save.
+        """
+        last_child = model.childAlgorithm(last_step_id)
+        last_alg = registry.algorithmById(last_child.algorithmId())
+        output_names = [o.name() for o in last_alg.outputDefinitions()] if last_alg else []
+        if not output_names:
+            return
+        preferred = "OUTPUT" if "OUTPUT" in output_names else output_names[0]
+        mo = QgsProcessingModelOutput("Result")
+        mo.setChildId(last_step_id)
+        mo.setChildOutputName(preferred)
+        mo.setDescription("Result")
+        last_child.setModelOutputs({"Result": mo})
+
+    def _model_target_path(self, name, provider):
+        """The models folder plus a free ``<name>.model3`` path inside it.
+
+        Returns ``(final_name, target_path)``: *final_name* carries a ``_2``,
+        ``_3`` ... suffix when the file for *name* is already there.
+        """
+        models_dir = None
+        if provider is not None and hasattr(provider, "modelsFolder"):
+            with contextlib.suppress(Exception):
+                models_dir = provider.modelsFolder()
+        if models_dir is None:
+            models_dir = os.path.join(QgsApplication.qgisSettingsDirPath(), "processing", "models")
+        os.makedirs(models_dir, exist_ok=True)
+
+        target_path = os.path.join(models_dir, f"{name}.model3")
+        if not os.path.exists(target_path):
+            return name, target_path
+        for suffix in range(2, 1001):
+            candidate = f"{name}_{suffix}"
+            candidate_path = os.path.join(models_dir, f"{candidate}.model3")
+            if not os.path.exists(candidate_path):
+                return candidate, candidate_path
+        raise CommandError(
+            f"Could not find a unique name for '{name}' in {models_dir} (tried up to _1000)"
+        )
+
+    @command
+    def create_processing_model(
+        self,
+        name,
+        steps,
+        inputs=None,
+        outputs=None,
+        description="",
+        group="Models",
+        **kwargs,
+    ):
+        """Build a Processing Model from a structured spec, save it into the
+        QGIS user models folder under a unique name, and register it.
+
+        Reference syntax in step parameter values:
+          "@input_name"        – model input parameter
+          "$step_id.OUTPUT"    – output of a previous step
+          "=expression"        – QGIS expression
+          anything else        – static literal (numbers, bools, strings, lists, ...)
+        """
+        if not name or not isinstance(name, str):
+            raise CommandError("Model 'name' is required")
+        if not isinstance(steps, list) or not steps:
+            raise CommandError("'steps' must be a non-empty list")
+
+        registry = QgsApplication.processingRegistry()
+
+        # ---- Resolve models folder & pick a unique file name up front ----
+        provider = registry.providerById("model")
+        final_name, target_path = self._model_target_path(name, provider)
+
+        # ---- Build model skeleton ----
+        model = QgsProcessingModelAlgorithm()
+        model.setName(final_name)
+        if group:
+            model.setGroup(group)
+        if description:
+            with contextlib.suppress(Exception):
+                model.setHelpContent({"ALG_DESC": description})
+
+        # ---- Inputs ----
+        defined_inputs = set()
+        for idx, spec in enumerate(inputs or []):
+            if not isinstance(spec, dict) or "name" not in spec:
+                raise CommandError(f"Input #{idx} must be a dict with at least 'name'")
+            param_def = self._make_input_definition(spec)
+            mp = QgsProcessingModelParameter(spec["name"])
+            mp.setPosition(QPointF(50.0, 50.0 + idx * 100.0))
+            model.addModelParameter(param_def, mp)
+            defined_inputs.add(spec["name"])
+
+        # ---- Steps ----
+        defined_steps = []
+        resolved = self._resolve_model_steps(steps, registry)
+
+        # Outputs may be marked on a per-step basis; collect them by step id
+        outputs_by_step = self._model_outputs_by_step(outputs, resolved, registry)
+
+        for step_idx, (step, alg_id) in enumerate(resolved):
+            child = QgsProcessingModelChildAlgorithm(alg_id)
+            child.setChildId(step["id"])
+            child.setDescription(
+                step.get("description") or registry.algorithmById(alg_id).displayName()
+            )
+            child.setPosition(QPointF(300.0 + step_idx * 250.0, 50.0))
+
+            for pname, pvalue in (step.get("parameters") or {}).items():
+                # Build sources, validating refs against already-defined inputs/steps.
+                sources = self._build_param_source(pvalue, defined_inputs, set(defined_steps))
+                child.addParameterSources(pname, sources)
+
+            # Final outputs declared for this step
+            step_outputs = outputs_by_step.get(step["id"], {})
+            if step_outputs:
+                model_outputs = {}
+                for out_name, out_spec in step_outputs.items():
+                    mo = QgsProcessingModelOutput(out_name)
+                    mo.setChildId(step["id"])
+                    mo.setChildOutputName(out_spec["from_output"])
+                    mo.setDescription(out_spec.get("description") or out_name)
+                    model_outputs[out_name] = mo
+                child.setModelOutputs(model_outputs)
+
+            model.addChildAlgorithm(child)
+            defined_steps.append(step["id"])
+
+        if not outputs and defined_steps:
+            self._expose_last_output(model, registry, defined_steps[-1])
+
+        # ---- Write the .model3 file directly into the models folder ----
+        if not model.toFile(target_path):
+            raise CommandError(f"Failed to write model to {target_path}")
+
+        # ---- Register with the model provider so it shows up in the toolbox ----
+        registered = False
+        if provider is not None:
+            try:
+                provider.refreshAlgorithms()
+                registered = True
+            except Exception as e:
+                QgsMessageLog.logMessage(
+                    f"Model saved but provider refresh failed: {e}", self.LOG_TAG, MSG_WARNING
+                )
+
+        QgsMessageLog.logMessage(
+            f"Processing model '{final_name}' saved to {target_path}", self.LOG_TAG, MSG_INFO
+        )
+        output_count = sum(len(v) for v in outputs_by_step.values()) or (1 if defined_steps else 0)
+        return {
+            "ok": True,
+            "name": final_name,
+            "requested_name": name,
+            "path": target_path,
+            "registered": registered,
+            "input_count": len(defined_inputs),
+            "step_count": len(defined_steps),
+            "output_count": output_count,
+            # Echo the resolved algorithm ids so the caller can confirm fuzzy matches.
+            "resolved_steps": [
+                {"id": step["id"], "algorithm": alg_id, "hint": step["algorithm"]}
+                for step, alg_id in resolved
+            ],
+        }
+
+    @command
+    def list_processing_models(self, **kwargs):
+        """List registered Processing models (provider 'model')."""
+        registry = QgsApplication.processingRegistry()
+        models = []
+        for alg in registry.algorithms():
+            if alg.provider().id() == "model":
+                models.append({"id": alg.id(), "name": alg.displayName(), "group": alg.group()})
+        return {"models": models, "count": len(models)}
+
+    @command
+    def run_model(self, model, parameters=None, ellipsoid=None, **kwargs):
+        """Run a Processing model by registered id or by .model3 file path."""
+        from qgis.core import QgsProcessingDestinationParameter
+
+        parameters = dict(parameters or {})
+        if isinstance(model, str) and model.lower().endswith(".model3"):
+            alg = QgsProcessingModelAlgorithm()
+            if not alg.fromFile(model):
+                raise CommandError(f"Failed to load model file: {model}")
+            alg.initAlgorithm()
+            target = alg
+        else:
+            registry = QgsApplication.processingRegistry()
+            alg = registry.algorithmById(model)
+            # Registered model ids carry a "model:" prefix, but callers see the
+            # bare name in create_processing_model's response - accept both.
+            if alg is None and isinstance(model, str) and not model.startswith("model:"):
+                prefixed = f"model:{model}"
+                alg = registry.algorithmById(prefixed)
+                if alg is not None:
+                    model = prefixed
+            target = model
+
+        # Destination (sink/output) parameters have no default, so omitting one
+        # aborts the run. The Processing GUI defaults them to a temporary layer;
+        # do the same so callers only have to supply the model's real inputs.
+        if alg is not None:
+            for param in alg.parameterDefinitions():
+                if isinstance(param, QgsProcessingDestinationParameter):
+                    parameters.setdefault(param.name(), "TEMPORARY_OUTPUT")
+
+        feedback = _ResponsiveFeedback(self._PROCESSING_TIMEOUT)
+        context = self._ellipsoid_context(ellipsoid, feedback)
+        result = self._run_alg(target, parameters, feedback, context=context)
+        return {
+            "model": model,
+            "result": {k: _output_value(v) for k, v in result.items()},
+            **_warnings(feedback),
+        }
+
+    @command
+    def get_processing_providers(self, **kwargs):
+        """List Processing providers with algorithm counts and active status."""
+        registry = QgsApplication.processingRegistry()
+        providers = []
+        for p in registry.providers():
+            info = {
+                "id": p.id(),
+                "name": p.name(),
+                "algorithm_count": len(p.algorithms()),
+            }
+            with contextlib.suppress(Exception):
+                info["active"] = bool(p.isActive())
+            providers.append(info)
+        return {"providers": providers, "count": len(providers)}
+
+    @command
+    def execute_processing_batch(
+        self, algorithm, parameters_list, timeout=None, ellipsoid=None, **kwargs
+    ):
+        """Run the same algorithm once per parameter dict; collect per-run results.
+
+        `timeout` bounds the whole batch (default `_PROCESSING_TIMEOUT`), not each run:
+        runs that would start after it has elapsed are reported as skipped, so the caller
+        gets the results collected so far instead of a client timeout that loses all of
+        them (#43).
+        """
+        budget = self._PROCESSING_TIMEOUT if timeout is None else float(timeout)
+        if ellipsoid is not None:
+            # Once, up front: a bad ellipsoid is not a per-run failure.
+            self._check_ellipsoid(ellipsoid)
+        deadline = time.monotonic() + budget
+        results = []
+        for i, params in enumerate(parameters_list):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                results.append(
+                    {
+                        "index": i,
+                        "status": "skipped",
+                        "message": f"Batch budget of {budget:g}s exhausted before this run started",
+                    }
+                )
+                continue
+            try:
+                feedback = _ResponsiveFeedback(min(self._PROCESSING_TIMEOUT, remaining))
+                context = self._ellipsoid_context(ellipsoid, feedback)
+                r = self._run_alg(algorithm, params, feedback, context=context)
+                results.append(
+                    {
+                        "index": i,
+                        "status": "success",
+                        "result": {k: _output_value(v) for k, v in r.items()},
+                        **_warnings(feedback),
+                    }
+                )
+            except Exception as e:
+                results.append({"index": i, "status": "error", "message": str(e)})
+        response = {"algorithm": algorithm, "results": results, "count": len(results)}
+        if any(r["status"] == "skipped" for r in results):
+            response["timed_out"] = True
+        return response
+
+    @command
+    def raster_calculator(self, expression, output_path, reference_layer=None, **kwargs):
+        """Band math via QgsRasterCalculator. Reference loaded rasters as 'name@band'."""
+        from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
+
+        project = QgsProject.instance()
+        entries = []
+        rasters = []
+        for layer in project.mapLayers().values():
+            if layer.type() != LAYER_RASTER:
+                continue
+            rasters.append(layer)
+            for band in range(1, layer.bandCount() + 1):
+                e = QgsRasterCalculatorEntry()
+                e.ref = f"{layer.name()}@{band}"
+                e.raster = layer
+                e.bandNumber = band
+                entries.append(e)
+        if not rasters:
+            raise CommandError("No raster layers loaded to compute from")
+
+        # Same-named rasters register the same 'name@band' ref and the calculator
+        # binds one of them silently, so a referenced name must be unique.
+        names = [layer.name() for layer in rasters]
+        for name in sorted({n for n in names if names.count(n) > 1}):
+            if re.search(rf"(?<![\w]){re.escape(name)}@\d", expression):
+                ids = [layer.id() for layer in rasters if layer.name() == name]
+                raise CommandError(
+                    f"Ambiguous raster name '{name}': {len(ids)} loaded layers share it "
+                    f"({', '.join(ids)}). Rename one so the expression names a single layer."
+                )
+
+        if reference_layer:
+            matches = [lyr for lyr in rasters if reference_layer in (lyr.id(), lyr.name())]
+            if not matches:
+                raise CommandError(f"Reference raster layer not found: {reference_layer}")
+            if len(matches) > 1:
+                raise CommandError(
+                    f"Ambiguous reference_layer '{reference_layer}': matches "
+                    f"{', '.join(lyr.id() for lyr in matches)}. Pass a layer id."
+                )
+            ref = matches[0]
+        else:
+            # A web basemap is a raster too, but has no grid worth inheriting.
+            files = [lyr for lyr in rasters if lyr.providerType() == "gdal"]
+            if not files:
+                raise CommandError("No file-based raster loaded; pass reference_layer")
+            ref = files[0]
+
+        # The output CRS must be passed explicitly: the overload without it takes
+        # the CRS of the first entry, which is project order, not the reference,
+        # and writes the reference's extent under another CRS.
+        calc = QgsRasterCalculator(
+            expression,
+            output_path,
+            "GTiff",
+            ref.extent(),
+            ref.crs(),
+            ref.width(),
+            ref.height(),
+            entries,
+            project.transformContext(),
+        )
+        res = calc.processCalculation()
+        if int(res) != 0:
+            reason = calc.lastError()
+            detail = f": {reason}" if reason else ""
+            raise CommandError(f"Raster calculation failed (code {int(res)}){detail}")
+        return {
+            "ok": True,
+            "output": output_path,
+            "reference_layer": ref.name(),
+            "reference_layer_id": ref.id(),
+            "crs": ref.crs().authid(),
+        }
+
+    @command
+    def zonal_statistics(
+        self,
+        polygon_layer,
+        raster_layer,
+        band=1,
+        prefix="_",
+        stats=None,
+        output_path=None,
+        **kwargs,
+    ):
+        """Per-polygon raster statistics (native:zonalstatisticsfb).
+
+        stats: list of int codes (0=count,1=sum,2=mean,3=median,4=stdev,5=min,
+        6=max,7=range,8=minority,9=majority,10=variety,11=variance).
+        """
+        poly = self._get_vector_layer(polygon_layer)
+        rast = self._get_raster_layer(raster_layer)
+        params = {
+            "INPUT": poly,
+            "INPUT_RASTER": rast,
+            "RASTER_BAND": band,
+            "COLUMN_PREFIX": prefix,
+            "STATISTICS": stats or [0, 1, 2],
+            "OUTPUT": output_path or "memory:zonal_stats",
+        }
+        r, warnings = self._run_alg_with_warnings("native:zonalstatisticsfb", params)
+        return {**self._register_output(r["OUTPUT"], "zonal_stats"), **warnings}
+
+    @command
+    def sample_raster_values(self, raster_layer, points, band=None, crs=None, **kwargs):
+        """Sample raster values at points [[x, y], ...], in *crs* or the raster's CRS."""
+        layer = self._get_raster_layer(raster_layer)
+        dp = layer.dataProvider()
+        to_raster = None
+        if crs:
+            src = self._parse_crs(crs)
+            if src != layer.crs():
+                to_raster = QgsCoordinateTransform(src, layer.crs(), QgsProject.instance())
+        # sample() answers (nan, False) alike for nodata, a point off the raster
+        # and a band that does not exist, so the last two are told apart here:
+        # a wrong band is refused, and each point says whether it was outside.
+        if band is not None and not 1 <= int(band) <= layer.bandCount():
+            raise CommandError(f"Band {band} out of range: the raster has {layer.bandCount()}")
+        extent = layer.extent()
+        results = []
+        for pt in points:
+            p = QgsPointXY(pt[0], pt[1])
+            if to_raster is not None:
+                try:
+                    p = to_raster.transform(p)
+                except QgsCsException:
+                    # Off what the raster's CRS can express: no value, and the
+                    # rest of the points still sampled.
+                    failed = {"x": pt[0], "y": pt[1], "outside_extent": True}
+                    if band is not None:
+                        failed.update({"band": int(band), "value": None})
+                    else:
+                        failed["values"] = dict.fromkeys(range(1, layer.bandCount() + 1))
+                    failed["transform_failed"] = True
+                    results.append(failed)
+                    continue
+            sample = {"x": pt[0], "y": pt[1], "outside_extent": not extent.contains(p)}
+            if band is not None:
+                val, ok = dp.sample(p, int(band))
+                sample.update({"band": int(band), "value": val if ok else None})
+            else:
+                vals = {}
+                for b in range(1, layer.bandCount() + 1):
+                    v, ok = dp.sample(p, b)
+                    vals[b] = v if ok else None
+                sample["values"] = vals
+            results.append(sample)
+        # Points in another CRS than the one read in all land outside, which
+        # outside_extent and this make visible.
+        return {
+            "samples": results,
+            "count": len(results),
+            "crs": crs or layer.crs().authid(),
+        }
+
+    @command
+    def spatial_join(
+        self,
+        target_layer,
+        join_layer,
+        predicates=None,
+        join_fields=None,
+        method=1,
+        prefix="",
+        output_path=None,
+        **kwargs,
+    ):
+        """Join attributes by location (native:joinattributesbylocation).
+
+        predicates: list of int (0=intersects,1=contains,2=equals,3=touches,
+        4=overlaps,5=within,6=crosses). method: 0=one-to-many, 1=first match,
+        2=largest overlap.
+        """
+        target = self._get_vector_layer(target_layer)
+        join = self._get_vector_layer(join_layer)
+        params = {
+            "INPUT": target,
+            "JOIN": join,
+            "PREDICATE": predicates or [0],
+            "JOIN_FIELDS": join_fields or [],
+            "METHOD": method,
+            "PREFIX": prefix,
+            "OUTPUT": output_path or "memory:joined",
+        }
+        r, warnings = self._run_alg_with_warnings("native:joinattributesbylocation", params)
+        response = self._register_output(r["OUTPUT"], "joined")
+        # Without these the caller cannot tell how much joined, or that first
+        # match (the default) kept one arbitrary match and dropped the rest.
+        response.update(
+            {
+                "method": self._JOIN_METHODS.get(int(method), str(method)),
+                "target_features": target.featureCount(),
+                # Target features that found a match, whatever the method: a
+                # one-to-many layer has more rows than this.
+                "joined_count": r.get("JOINED_COUNT"),
+                **warnings,
+            }
+        )
+        return response
+
+    _JOIN_METHODS: ClassVar[dict] = {0: "one_to_many", 1: "first_match", 2: "largest_overlap"}
+
+    def _register_output(self, out, default_name):
+        """Add a processing output layer to the project, or report a file path."""
+        if isinstance(out, str):
+            return {"output": out}
+        out.setName(default_name)
+        QgsProject.instance().addMapLayer(out)
+        return {"output_layer_id": out.id(), "name": out.name()}

@@ -1,5 +1,7 @@
 from qgis.PyQt.QtCore import QCoreApplication
-from qgis.core import (QgsProcessingAlgorithm,
+from qgis.core import (Qgis,
+                      QgsApplication,
+                      QgsProcessingAlgorithm,
                       QgsProcessingParameterVectorLayer,
                       QgsProcessingParameterField,
                       QgsProcessingParameterFileDestination,
@@ -137,7 +139,7 @@ class ContourExportAlgorithm(QgsProcessingAlgorithm):
                     'dataDefinedBlocksMaximumNumberOfClasses': -1
                 }],
                 'CRS': target_crs,
-                'ENCODING': 'cp1252',
+                'ENCODING': self.dxfEncoding(),
                 'FORCE_2D': False,
                 'EXPORT_LINES_WITH_ZERO_WIDTH': False,
                 'SYMBOLOGY_MODE': 0,
@@ -172,6 +174,27 @@ class ContourExportAlgorithm(QgsProcessingAlgorithm):
         except Exception as e:
             feedback.reportError(f"Error during DXF export: {str(e)}")
             raise e
+
+    def dxfEncoding(self):
+        """Return the encoding name that native:dxfexport accepts in this QGIS.
+
+        ENCODING is a static-string enum and its options changed with Qt6:
+        QGIS 3 lists 'cp1252', QGIS 4 lists 'CP1252', and anything outside the
+        list is rejected with "Incorrect parameter value for ENCODING".
+        """
+        fallback = 'CP1252' if Qgis.QGIS_VERSION_INT >= 40000 else 'cp1252'
+        try:
+            alg = QgsApplication.processingRegistry().algorithmById('native:dxfexport')
+            options = list(alg.parameterDefinition('ENCODING').options())
+        except Exception:
+            return fallback
+        if not options:
+            return fallback
+        available = {option.lower(): option for option in options}
+        for preferred in ('cp1252', 'iso-8859-1'):
+            if preferred in available:
+                return available[preferred]
+        return options[0]
 
     def name(self):
         return 'contourexport'
