@@ -6,6 +6,7 @@ from qgis.core import (QgsProcessing, QgsFeatureSink, QgsProcessingAlgorithm,
                        QgsFields, QgsField, QgsWkbTypes, QgsProcessingException, QgsProject, QgsVectorLayer)
 from collections import defaultdict, deque
 import math
+from .translation import ag_tr, ag_trf
 
 class LinesToOrderedPointsAlgorithm(QgsProcessingAlgorithm):
     INPUT = 'INPUT'
@@ -43,7 +44,7 @@ class LinesToOrderedPointsAlgorithm(QgsProcessingAlgorithm):
         """)
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)
 
     def initAlgorithm(self, config=None):
         self.addParameter(
@@ -63,7 +64,7 @@ class LinesToOrderedPointsAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterEnum(
                 self.METHOD,
                 self.tr('Select the method'),
-                options=['DFS (Depth-First Search)', 'BFS (Breadth-First Search)'],
+                options=[ag_tr('DFS (Depth-First Search)'), ag_tr('BFS (Breadth-First Search)')],
                 defaultValue=0
             )
         )

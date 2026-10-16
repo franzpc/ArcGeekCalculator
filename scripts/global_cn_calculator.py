@@ -16,6 +16,7 @@ import os
 import tempfile
 import csv
 from osgeo import gdal
+from .translation import ag_tr, ag_trf
 
 class GlobalCNCalculator(QgsProcessingAlgorithm):
     
@@ -186,7 +187,7 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
 
     def _fetch_url(self, url, headers=None, timeout=30):
         if urlparse(url).scheme not in ('http', 'https'):
-            raise QgsProcessingException(f'Invalid URL scheme: {url}')
+            raise QgsProcessingException(ag_trf('Invalid URL scheme: {0}', url))
         req = urllib.request.Request(url, headers=headers or {})
         with urllib.request.urlopen(req, timeout=timeout) as response:  # nosec B310
             return response.read()
@@ -202,7 +203,7 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
         try:
             return self._fetch_url(primary_url, headers=_headers, timeout=10)
         except urllib.error.URLError as e:
-            feedback.pushWarning(f'Primary server unavailable ({e.reason}), switching to GitHub fallback{" for " + label if label else ""}...')
+            feedback.pushWarning(ag_trf('Primary server unavailable ({0}), switching to GitHub fallback{1}...', e.reason, " for " + label if label else ""))
             return self._fetch_url(fallback_url, timeout=60)
 
     def process_soil_data_tiles(self, aoi, parameters, context, feedback):
@@ -214,7 +215,7 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
         _FALLBACK = "https://github.com/franzpc/ArcGeekCalculator/releases/download/hysog-tiles-v1/"
 
         try:
-            feedback.pushInfo('Downloading tiles information...')
+            feedback.pushInfo(ag_tr('Downloading tiles information...'))
             csv_text = self._fetch_with_fallback(
                 _PRIMARY + "tiles_info.csv",
                 _FALLBACK + "tiles_info.csv",
@@ -244,15 +245,15 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
                     required_tiles.append(filename)
             
             if not required_tiles:
-                raise QgsProcessingException('No HYSOG tiles found for the study area')
+                raise QgsProcessingException(ag_tr('No HYSOG tiles found for the study area'))
             
-            feedback.pushInfo(f'Found {len(required_tiles)} required tiles: {", ".join(required_tiles)}')
+            feedback.pushInfo(ag_trf('Found {0} required tiles: {1}', len(required_tiles), ", ".join(required_tiles)))
             
             temp_dir = tempfile.mkdtemp()
             downloaded_tiles = []
             
             for i, tile_name in enumerate(required_tiles):
-                feedback.pushInfo(f'Downloading tile {i+1}/{len(required_tiles)}: {tile_name}')
+                feedback.pushInfo(ag_trf('Downloading tile {0}/{1}: {2}', i+1, len(required_tiles), tile_name))
                 temp_tile_path = os.path.join(temp_dir, tile_name)
                 tile_data = self._fetch_with_fallback(
                     _PRIMARY + tile_name,
@@ -267,7 +268,7 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             if len(downloaded_tiles) == 1:
                 merged_file = downloaded_tiles[0]
             else:
-                feedback.pushInfo('Merging multiple tiles...')
+                feedback.pushInfo(ag_tr('Merging multiple tiles...'))
                 merged_file = os.path.join(temp_dir, 'merged_hysog.tif')
                 
                 vrt_file = os.path.join(temp_dir, 'tiles.vrt')
@@ -280,7 +281,7 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
                 )
                 gdal.Translate(merged_file, vrt_file, options=translate_options)
             
-            feedback.pushInfo('Clipping HYSOG data to study area...')
+            feedback.pushInfo(ag_tr('Clipping HYSOG data to study area...'))
 
             _clipped_path = os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'hysog_clipped.tif')
             gdal.Translate(_clipped_path, merged_file,
@@ -288,7 +289,7 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
                            creationOptions=['COMPRESS=LZW'], format='GTiff')
             clipped_output = _clipped_path
             
-            feedback.pushInfo('Processing NoData and invalid soil group values...')
+            feedback.pushInfo(ag_tr('Processing NoData and invalid soil group values...'))
             
             _fill_output = os.path.join(tempfile.mkdtemp(prefix='qgis_temp_'), 'filled.tif')
             _src_ds = gdal.Open(clipped_output)
@@ -330,9 +331,9 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             return result
             
         except urllib.error.URLError as e:
-            raise QgsProcessingException(f'Error downloading HYSOG tiles (both primary and fallback failed): {str(e)}')
+            raise QgsProcessingException(ag_trf('Error downloading HYSOG tiles (both primary and fallback failed): {0}', str(e)))
         except Exception as e:
-            raise QgsProcessingException(f'Error processing HYSOG data: {str(e)}')
+            raise QgsProcessingException(ag_trf('Error processing HYSOG data: {0}', str(e)))
 
     def align_rasters(self, soil_raster, lc_raster, context, feedback):
         lc = QgsRasterLayer(lc_raster)
@@ -401,12 +402,12 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
                     cn_values[lc][soil_code] = int(row['cn'])
                     
             if not cn_values:
-                raise QgsProcessingException(f'No valid CN values found in {csv_filename}')
+                raise QgsProcessingException(ag_trf('No valid CN values found in {0}', csv_filename))
             
             return cn_values
         
         except Exception as e:
-            raise QgsProcessingException(f'Error reading CN values from {csv_filename}: {str(e)}')
+            raise QgsProcessingException(ag_trf('Error reading CN values from {0}: {1}', csv_filename, str(e)))
 
     def calculate_statistics(self, raster_path, feedback):
         try:
@@ -427,13 +428,13 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             P = 100
             Q = ((P - 0.2 * S) ** 2) / (P + 0.8 * S) if P > 0.2 * S else 0
             
-            feedback.pushInfo('\n=== Curve Number Statistics ===')
-            feedback.pushInfo(f'Mean CN: {mean_cn:.2f}')
-            feedback.pushInfo(f'S = Maximum potential retention (mm): {S:.2f}')
+            feedback.pushInfo(ag_tr('\n=== Curve Number Statistics ==='))
+            feedback.pushInfo(ag_trf('Mean CN: {0:.2f}', mean_cn))
+            feedback.pushInfo(ag_trf('S = Maximum potential retention (mm): {0:.2f}', S))
             feedback.pushInfo('============================')
             
         except Exception as e:
-            feedback.pushWarning(f'Error calculating statistics: {str(e)}')
+            feedback.pushWarning(ag_trf('Error calculating statistics: {0}', str(e)))
 
     def name(self):
         return 'globalcurvenumber'
@@ -477,7 +478,7 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
         """)
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)
 
     def createInstance(self):
         return GlobalCNCalculator()

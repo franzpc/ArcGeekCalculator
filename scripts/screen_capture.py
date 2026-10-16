@@ -4,32 +4,33 @@ from qgis.PyQt.QtCore import Qt
 from qgis.core import QgsProject, QgsMapSettings, QgsMapRendererSequentialJob, QgsRasterLayer, QgsCoordinateReferenceSystem
 from qgis.gui import QgsMapCanvas
 from osgeo import gdal, osr
+from .translation import ag_tr, ag_trf
 
 class ScreenCaptureDialog(QDialog):
     def __init__(self, iface):
         super().__init__()
         self.iface = iface
-        self.setWindowTitle("Screen Capture")
+        self.setWindowTitle(ag_tr("Screen Capture"))
         self.layout = QVBoxLayout()
 
         self.output_layout = QHBoxLayout()
-        self.output_layout.addWidget(QLabel("Output File:"))
+        self.output_layout.addWidget(QLabel(ag_tr("Output File:")))
         self.output_file = QLineEdit()
         self.output_layout.addWidget(self.output_file)
-        self.browse_button = QPushButton("Browse")
+        self.browse_button = QPushButton(ag_tr("Browse"))
         self.browse_button.clicked.connect(self.browse_output_file)
         self.output_layout.addWidget(self.browse_button)
         self.layout.addLayout(self.output_layout)
 
         self.zoom_layout = QHBoxLayout()
-        self.zoom_layout.addWidget(QLabel("Zoom Factor:"))
+        self.zoom_layout.addWidget(QLabel(ag_tr("Zoom Factor:")))
         self.zoom_factor = QSpinBox()
         self.zoom_factor.setRange(1, 4)
         self.zoom_factor.setValue(2)
         self.zoom_layout.addWidget(self.zoom_factor)
         self.layout.addLayout(self.zoom_layout)
 
-        self.capture_button = QPushButton("Capture and Save")
+        self.capture_button = QPushButton(ag_tr("Capture and Save"))
         self.capture_button.clicked.connect(self.capture_and_save)
         self.layout.addWidget(self.capture_button)
 
@@ -43,14 +44,14 @@ class ScreenCaptureDialog(QDialog):
     def capture_and_save(self):
         output_file = self.output_file.text()
         if not output_file:
-            QMessageBox.warning(self, "Error", "Please specify an output file")
+            QMessageBox.warning(self, ag_tr("Error"), ag_tr("Please specify an output file"))
             return
 
         if not output_file.lower().endswith('.tif'):
             output_file += '.tif'
 
         if os.path.exists(output_file):
-            QMessageBox.warning(self, "Error", "File already exists. Please choose a different name.")
+            QMessageBox.warning(self, ag_tr("Error"), ag_tr("File already exists. Please choose a different name."))
             return
 
         zoom = self.zoom_factor.value()
@@ -97,9 +98,9 @@ class ScreenCaptureDialog(QDialog):
         if layer.isValid():
             QgsProject.instance().addMapLayer(layer)
         else:
-            QMessageBox.warning(self, "Error", "Failed to add captured image to the view")
+            QMessageBox.warning(self, ag_tr("Error"), ag_tr("Failed to add captured image to the view"))
 
-        QMessageBox.information(self, "Success", f"Screen capture saved as {output_file} and added to the view")
+        QMessageBox.information(self, ag_tr("Success"), ag_trf('Screen capture saved as {0} and added to the view', output_file))
         self.close()
 
 def run_screen_capture(iface):

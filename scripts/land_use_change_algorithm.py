@@ -6,6 +6,7 @@ from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterRasterLayer
 from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
 from qgis.PyQt.QtGui import QColor
 import math  # Use math.isnan as fallback if numpy is not available
+from .translation import ag_tr, ag_trf
 
 # ===== LAZY LOADING SYSTEM =====
 # NumPy will be imported only when the tool is executed
@@ -48,16 +49,16 @@ class LandUseChangeDetectionAlgorithm(QgsProcessingAlgorithm):
     OUTPUT_LOSS_RASTER = 'OUTPUT_LOSS_RASTER'
 
     def initAlgorithm(self, config=None):
-        self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_RASTER_BEFORE, 'Input raster layer (before)'))
-        self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_RASTER_AFTER, 'Input raster layer (after)'))
-        self.addParameter(QgsProcessingParameterNumber(self.CATEGORY_TO_ANALYZE, 'Category to analyze', 
+        self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_RASTER_BEFORE, ag_tr('Input raster layer (before)')))
+        self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_RASTER_AFTER, ag_tr('Input raster layer (after)')))
+        self.addParameter(QgsProcessingParameterNumber(self.CATEGORY_TO_ANALYZE, ag_tr('Category to analyze'), 
                                                    type=QgsProcessingParameterNumber.Type.Integer, 
                                                    minValue=0,  # Allow zero, but will validate against actual categories later
                                                    defaultValue=1))
-        self.addParameter(QgsProcessingParameterRasterDestination(self.OUTPUT_DETAILED_RASTER, 'Output detailed change raster', optional=True))
-        self.addParameter(QgsProcessingParameterRasterDestination(self.OUTPUT_SIMPLIFIED_RASTER, 'Output simplified change raster', optional=True))
-        self.addParameter(QgsProcessingParameterRasterDestination(self.OUTPUT_GAIN_RASTER, 'Output gain raster', optional=True))
-        self.addParameter(QgsProcessingParameterRasterDestination(self.OUTPUT_LOSS_RASTER, 'Output loss raster', optional=True))
+        self.addParameter(QgsProcessingParameterRasterDestination(self.OUTPUT_DETAILED_RASTER, ag_tr('Output detailed change raster'), optional=True))
+        self.addParameter(QgsProcessingParameterRasterDestination(self.OUTPUT_SIMPLIFIED_RASTER, ag_tr('Output simplified change raster'), optional=True))
+        self.addParameter(QgsProcessingParameterRasterDestination(self.OUTPUT_GAIN_RASTER, ag_tr('Output gain raster'), optional=True))
+        self.addParameter(QgsProcessingParameterRasterDestination(self.OUTPUT_LOSS_RASTER, ag_tr('Output loss raster'), optional=True))
 
     def processAlgorithm(self, parameters, context, feedback):
         # Get input parameters
@@ -70,7 +71,7 @@ class LandUseChangeDetectionAlgorithm(QgsProcessingAlgorithm):
         output_loss_raster = self.parameterAsOutputLayer(parameters, self.OUTPUT_LOSS_RASTER, context)
 
         if raster_before is None or raster_after is None:
-            raise QgsProcessingException('Invalid input layers')
+            raise QgsProcessingException(ag_tr('Invalid input layers'))
 
         # Get actual categories (not just range) from both rasters
         provider = raster_before.dataProvider()
@@ -88,16 +89,15 @@ class LandUseChangeDetectionAlgorithm(QgsProcessingAlgorithm):
         setattr(context, 'categoriesBefore', all_categories)
         setattr(context, 'categoriesAfter', all_categories)
         
-        feedback.pushInfo(f"Actual categories detected: {all_categories}")
-        feedback.pushInfo(f"Number of categories detected: {num_categories}")
+        feedback.pushInfo(ag_trf('Actual categories detected: {0}', all_categories))
+        feedback.pushInfo(ag_trf('Number of categories detected: {0}', num_categories))
 
         # Validate that the selected category exists in at least one of the rasters
         if category not in all_categories:
             # Format the available categories more nicely
             formatted_categories = ", ".join(map(str, all_categories))
             raise QgsProcessingException(
-                f'Selected category ({category}) does not exist in either raster. '
-                f'Available categories are: {formatted_categories}.'
+                ag_trf('Selected category ({0}) does not exist in either raster. Available categories are: {1}.', category, formatted_categories)
             )
 
         # Prepare raster entries for calculation
@@ -134,15 +134,15 @@ class LandUseChangeDetectionAlgorithm(QgsProcessingAlgorithm):
         for formula, output in formulas_and_outputs:
             if not output:
                 continue
-            feedback.pushInfo(f"Processing formula: {formula}")
+            feedback.pushInfo(ag_trf('Processing formula: {0}', formula))
             calc = QgsRasterCalculator(formula, output, 'GTiff', 
                                        raster_before.extent(), raster_before.width(), raster_before.height(), 
                                        entries)
             result = calc.processCalculation(feedback)
             if result != 0:
-                feedback.pushInfo(f"Error code: {result}")
-                raise QgsProcessingException(f'Error calculating raster: {output}')
-            feedback.pushInfo(f"Successfully created: {output}")
+                feedback.pushInfo(ag_trf('Error code: {0}', result))
+                raise QgsProcessingException(ag_trf('Error calculating raster: {0}', output))
+            feedback.pushInfo(ag_trf('Successfully created: {0}', output))
 
             # Apply appropriate symbology based on output type
             if output == output_detailed_raster:
@@ -248,9 +248,9 @@ class LandUseChangeDetectionAlgorithm(QgsProcessingAlgorithm):
             layer.triggerRepaint()
 
             context.project().addMapLayer(layer)
-            feedback.pushInfo(f"Custom symbology applied to {layer_name}")
+            feedback.pushInfo(ag_trf('Custom symbology applied to {0}', layer_name))
         else:
-            feedback.pushWarning(f"Failed to apply custom symbology to {layer_name}")
+            feedback.pushWarning(ag_trf('Failed to apply custom symbology to {0}', layer_name))
 
     def apply_detailed_symbology(self, raster_path, layer_name, num_categories, multiplier, context, feedback):
         """Apply detailed symbology to change raster"""
@@ -308,15 +308,15 @@ class LandUseChangeDetectionAlgorithm(QgsProcessingAlgorithm):
             layer.triggerRepaint()
 
             context.project().addMapLayer(layer)
-            feedback.pushInfo(f"Custom detailed symbology applied to {layer_name}")
+            feedback.pushInfo(ag_trf('Custom detailed symbology applied to {0}', layer_name))
         else:
-            feedback.pushWarning(f"Failed to apply custom detailed symbology to {layer_name}")
+            feedback.pushWarning(ag_trf('Failed to apply custom detailed symbology to {0}', layer_name))
 
     def name(self):
         return 'landusechangedetection'
 
     def displayName(self):
-        return 'Land Use Change Detection'
+        return ag_tr('Land Use Change Detection')
 
     def group(self):
         return 'ArcGeek Calculator'
@@ -325,7 +325,7 @@ class LandUseChangeDetectionAlgorithm(QgsProcessingAlgorithm):
         return 'arcgeek_calculator'
 
     def shortHelpString(self):
-        return """
+        return ag_tr("""
         Calculates changes between two raster images representing land use/cover at different times.
 
         Parameters:
@@ -343,7 +343,7 @@ class LandUseChangeDetectionAlgorithm(QgsProcessingAlgorithm):
         4. Loss raster: Where specified category was lost
 
         Note: Supports up to 99 categories with automatic symbology.
-        """
+        """)
 
     def createInstance(self):
         return LandUseChangeDetectionAlgorithm()

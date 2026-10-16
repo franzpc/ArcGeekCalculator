@@ -11,6 +11,7 @@ from qgis.core import (
 import os
 import webbrowser
 import urllib.parse
+from .translation import ag_tr, ag_trf
 
 # ===== LAZY LOADING SYSTEM =====
 # Plotly will be imported only when the tool is executed
@@ -57,7 +58,7 @@ class TopographicProfileAlgorithm(QgsProcessingAlgorithm):
     OUTPUT_HTML = 'OUTPUT_HTML'
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)
 
     def createInstance(self):
         return TopographicProfileAlgorithm()
@@ -189,13 +190,13 @@ class TopographicProfileAlgorithm(QgsProcessingAlgorithm):
         output_html = self.parameterAsFileOutput(parameters, self.OUTPUT_HTML, context)
 
         if not line_layer:
-            raise QgsProcessingException("No input line layer specified")
+            raise QgsProcessingException(ag_tr("No input line layer specified"))
         if not dem_layer.isValid():
-            raise QgsProcessingException("Invalid DEM layer")
+            raise QgsProcessingException(ag_tr("Invalid DEM layer"))
 
         # Ensure that line layer and DEM share the same CRS.
         if dem_layer.crs() != line_layer.sourceCrs():
-            feedback.pushWarning("Line layer CRS does not match DEM CRS. Reloading line layer with DEM CRS.")
+            feedback.pushWarning(ag_tr("Line layer CRS does not match DEM CRS. Reloading line layer with DEM CRS."))
             line_layer = QgsVectorLayer(line_layer.dataProvider().dataSourceUri(), 
                                         line_layer.name(), 
                                         line_layer.dataProvider().name())
@@ -204,15 +205,15 @@ class TopographicProfileAlgorithm(QgsProcessingAlgorithm):
         # Check points layer CRS if provided.
         if points_layer and points_layer.isValid():
             if points_layer.sourceCrs() != dem_layer.crs():
-                feedback.reportError("Not all layers share the same CRS. Please reproject them.")
-                raise QgsProcessingException("CRS mismatch among layers.")
+                feedback.reportError(ag_tr("Not all layers share the same CRS. Please reproject them."))
+                raise QgsProcessingException(ag_tr("CRS mismatch among layers."))
 
         features = list(line_layer.getFeatures())
         if not features:
-            raise QgsProcessingException("No features in line layer")
+            raise QgsProcessingException(ag_tr("No features in line layer"))
         line_geometry = features[0].geometry()
         if not dem_layer.extent().contains(line_geometry.boundingBox()):
-            raise QgsProcessingException("Line is outside DEM bounds")
+            raise QgsProcessingException(ag_tr("Line is outside DEM bounds"))
 
         # Check that the line forms a single continuous line.
         if line_geometry.isMultipart():
@@ -221,7 +222,7 @@ class TopographicProfileAlgorithm(QgsProcessingAlgorithm):
                 tol = 0.001
                 for i in range(1, len(multi)):
                     if multi[i-1][-1].distance(multi[i][0]) > tol:
-                        raise QgsProcessingException("The input line is not continuous (contains branches or discontinuities).")
+                        raise QgsProcessingException(ag_tr("The input line is not continuous (contains branches or discontinuities)."))
                 # Merge continuous segments.
                 points = []
                 for poly in multi:
@@ -231,7 +232,7 @@ class TopographicProfileAlgorithm(QgsProcessingAlgorithm):
         else:
             points = [QgsPointXY(p) for p in line_geometry.asPolyline()]
         if not points:
-            raise QgsProcessingException("No points found in line geometry")
+            raise QgsProcessingException(ag_tr("No points found in line geometry"))
 
         # Set a default for sample_interval.
         sample_interval = 10
@@ -268,9 +269,9 @@ class TopographicProfileAlgorithm(QgsProcessingAlgorithm):
                     raw_distances.append(current_distance)
                     raw_elevations.append(elevation)
                 else:
-                    feedback.pushInfo(f"Warning: Invalid elevation at ({x:.3f}, {y:.3f})")
+                    feedback.pushInfo(ag_trf('Warning: Invalid elevation at ({0:.3f}, {1:.3f})', x, y))
         if not raw_elevations:
-            raise QgsProcessingException("No valid elevations obtained")
+            raise QgsProcessingException(ag_tr("No valid elevations obtained"))
 
         # Optionally invert the profile.
         if invert_profile:
@@ -338,7 +339,7 @@ class TopographicProfileAlgorithm(QgsProcessingAlgorithm):
                         name = f"Point {feat.id()}"
                     elevation, ok = dem_layer.dataProvider().sample(pt, 1)
                     if not (ok and elevation != no_data_value and elevation is not None):
-                        feedback.pushInfo(f"Warning: Could not sample DEM at point {pt}")
+                        feedback.pushInfo(ag_trf('Warning: Could not sample DEM at point {0}', pt))
                         continue
                     labeled_points.append({
                         "distance": label_distance_conv,

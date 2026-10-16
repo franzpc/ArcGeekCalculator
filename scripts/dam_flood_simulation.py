@@ -7,6 +7,7 @@ from qgis.core import (QgsProcessing, QgsProcessingAlgorithm, QgsProcessingParam
 import processing
 import os
 import tempfile
+from .translation import ag_tr, ag_trf
 
 class DamFloodSimulationAlgorithm(QgsProcessingAlgorithm):
     INPUT_DEM = 'INPUT_DEM'
@@ -15,10 +16,10 @@ class DamFloodSimulationAlgorithm(QgsProcessingAlgorithm):
     OUTPUT_RASTER = 'OUTPUT_RASTER'
 
     def initAlgorithm(self, config=None):
-        self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_DEM, 'Input DEM'))
-        self.addParameter(QgsProcessingParameterNumber(self.WATER_LEVEL, 'Water Level (m)', type=QgsProcessingParameterNumber.Type.Double, defaultValue=25))
-        self.addParameter(QgsProcessingParameterExtent(self.STUDY_AREA, 'Study Area', optional=True))
-        self.addParameter(QgsProcessingParameterRasterDestination(self.OUTPUT_RASTER, 'Output Water Depth Raster'))
+        self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_DEM, ag_tr('Input DEM')))
+        self.addParameter(QgsProcessingParameterNumber(self.WATER_LEVEL, ag_tr('Water Level (m)'), type=QgsProcessingParameterNumber.Type.Double, defaultValue=25))
+        self.addParameter(QgsProcessingParameterExtent(self.STUDY_AREA, ag_tr('Study Area'), optional=True))
+        self.addParameter(QgsProcessingParameterRasterDestination(self.OUTPUT_RASTER, ag_tr('Output Water Depth Raster')))
 
     def processAlgorithm(self, parameters, context, feedback):
         original_dem = self.parameterAsRasterLayer(parameters, self.INPUT_DEM, context)
@@ -27,11 +28,11 @@ class DamFloodSimulationAlgorithm(QgsProcessingAlgorithm):
         output_raster = self.parameterAsOutputLayer(parameters, self.OUTPUT_RASTER, context)
 
         if not original_dem.isValid():
-            raise QgsProcessingException('Invalid DEM layer')
+            raise QgsProcessingException(ag_tr('Invalid DEM layer'))
 
         # Determine which DEM to use
         if study_area and not study_area.isNull():
-            feedback.pushInfo('Clipping DEM to specified study area...')
+            feedback.pushInfo(ag_tr('Clipping DEM to specified study area...'))
             from osgeo import gdal
             gdal.UseExceptions()
             _dem_path = original_dem.dataProvider().dataSourceUri().split('|')[0]
@@ -43,10 +44,10 @@ class DamFloodSimulationAlgorithm(QgsProcessingAlgorithm):
                            noData=_nodata, format='GTiff')
             dem_layer = QgsRasterLayer(_clip_path, 'Clipped DEM')
             if not dem_layer.isValid():
-                raise QgsProcessingException('Failed to clip DEM')
+                raise QgsProcessingException(ag_tr('Failed to clip DEM'))
         else:
             dem_layer = original_dem
-            feedback.pushInfo('Using the entire DEM (no study area specified).')
+            feedback.pushInfo(ag_tr('Using the entire DEM (no study area specified).'))
 
         # Get DEM properties
         width = dem_layer.width()
@@ -57,16 +58,16 @@ class DamFloodSimulationAlgorithm(QgsProcessingAlgorithm):
         dem_stats = dem_layer.dataProvider().bandStatistics(1, QgsRasterBandStats.Stats.All)
         dem_min = dem_stats.minimumValue
         dem_max = dem_stats.maximumValue
-        feedback.pushInfo(f'DEM Min: {dem_min}, Max: {dem_max}')
+        feedback.pushInfo(ag_trf('DEM Min: {0}, Max: {1}', dem_min, dem_max))
 
         # Check if the DEM is very mountainous
         elevation_range = dem_max - dem_min
         if elevation_range > 1000:  # Arbitrary threshold, adjust as needed
-            feedback.pushWarning('The DEM appears to be very mountainous. Due to the nature of the terrain, it may be challenging to find suitable areas for dam construction.')
+            feedback.pushWarning(ag_tr('The DEM appears to be very mountainous. Due to the nature of the terrain, it may be challenging to find suitable areas for dam construction.'))
 
         # Calculate flood level
         flood_level = dem_min + water_level
-        feedback.pushInfo(f'Flood level: {flood_level}')
+        feedback.pushInfo(ag_trf('Flood level: {0}', flood_level))
 
         # Create output raster
         writer = QgsRasterFileWriter(output_raster)
@@ -77,14 +78,14 @@ class DamFloodSimulationAlgorithm(QgsProcessingAlgorithm):
             Qgis.DataType.Float32, width, height, extent, dem_layer.crs())
 
         if not output_provider.isValid():
-            raise QgsProcessingException("Could not create raster output provider.")
+            raise QgsProcessingException(ag_tr("Could not create raster output provider."))
 
         NO_DATA = -9999
         output_provider.setNoDataValue(1, NO_DATA)
         output_provider.setEditable(True)
 
         # Calculate water depth
-        feedback.pushInfo('Calculating water depth...')
+        feedback.pushInfo(ag_tr('Calculating water depth...'))
         block = QgsRasterBlock(Qgis.DataType.Float32, width, 1)
         total_volume = 0
         flooded_area = 0
@@ -123,10 +124,10 @@ class DamFloodSimulationAlgorithm(QgsProcessingAlgorithm):
         total_volume *= cell_area  # Volume in cubic meters
         flooded_area *= cell_area  # Area in square meters
 
-        feedback.pushInfo(f'The total volume of stored water is: {total_volume:.2f} cubic meters')
-        feedback.pushInfo(f'The total flooded area is: {flooded_area:.2f} square meters')
-        feedback.pushInfo(f'Maximum water depth: {max_depth:.2f} meters')
-        feedback.pushInfo(f'Cell size used for calculation: {cell_width:.2f} x {cell_height:.2f} meters')
+        feedback.pushInfo(ag_trf('The total volume of stored water is: {0:.2f} cubic meters', total_volume))
+        feedback.pushInfo(ag_trf('The total flooded area is: {0:.2f} square meters', flooded_area))
+        feedback.pushInfo(ag_trf('Maximum water depth: {0:.2f} meters', max_depth))
+        feedback.pushInfo(ag_trf('Cell size used for calculation: {0:.2f} x {1:.2f} meters', cell_width, cell_height))
 
         return {self.OUTPUT_RASTER: output_raster}
 
@@ -160,7 +161,7 @@ class DamFloodSimulationAlgorithm(QgsProcessingAlgorithm):
         challenging to find suitable areas for dam construction in such landscapes.""")
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)
 
     def createInstance(self):
         return DamFloodSimulationAlgorithm()

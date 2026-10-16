@@ -12,6 +12,7 @@ from math import sqrt, floor, isnan, ceil, exp
 import heapq
 import collections
 from time import time
+from .translation import ag_tr, ag_trf
 
 class PathFinder:
     def __init__(self, matrix, heuristic_weight=1.0, slope_weight=0.5, diagonal_factor=1.0, flat_sensitivity=0.5, feedback=None):
@@ -91,12 +92,12 @@ class PathFinder:
         # Debug
         if self.feedback:
             elapsed = time() - self.calculation_started
-            self.feedback.pushInfo(f"Matrix shape: {self.height}x{self.width}")
-            self.feedback.pushInfo(f"Valid cells: {valid_count}")
-            self.feedback.pushInfo(f"Cost range: {self.min_cost} to {self.max_cost}")
-            self.feedback.pushInfo(f"Median cost: {self.median_cost}, IQR: {self.iqr}")
-            self.feedback.pushInfo(f"Flat terrain threshold: {self.flat_threshold}")
-            self.feedback.pushInfo(f"Initialization took {elapsed:.2f} seconds")
+            self.feedback.pushInfo(ag_trf('Matrix shape: {0}x{1}', self.height, self.width))
+            self.feedback.pushInfo(ag_trf('Valid cells: {0}', valid_count))
+            self.feedback.pushInfo(ag_trf('Cost range: {0} to {1}', self.min_cost, self.max_cost))
+            self.feedback.pushInfo(ag_trf('Median cost: {0}, IQR: {1}', self.median_cost, self.iqr))
+            self.feedback.pushInfo(ag_trf('Flat terrain threshold: {0}', self.flat_threshold))
+            self.feedback.pushInfo(ag_trf('Initialization took {0:.2f} seconds', elapsed))
     
     def _calculate_gradients(self):
         """Calculate gradients and microrelief indicators"""
@@ -278,7 +279,7 @@ class PathFinder:
         # Validate start and end
         if not self.is_valid(start) or not self.is_valid(end):
             if self.feedback:
-                self.feedback.pushInfo("Invalid start or end position")
+                self.feedback.pushInfo(ag_tr("Invalid start or end position"))
             return None
         
         # Direct distance for progress estimation
@@ -308,10 +309,10 @@ class PathFinder:
         
         # Debug
         if self.feedback:
-            self.feedback.pushInfo(f"Direct distance: {direct_distance:.1f} cells")
-            self.feedback.pushInfo(f"Max iterations set to: {max_iterations}")
-            self.feedback.pushInfo(f"Start cost: {self.cost_map.get(start, 'N/A')}")
-            self.feedback.pushInfo(f"End cost: {self.cost_map.get(end, 'N/A')}")
+            self.feedback.pushInfo(ag_trf('Direct distance: {0:.1f} cells', direct_distance))
+            self.feedback.pushInfo(ag_trf('Max iterations set to: {0}', max_iterations))
+            self.feedback.pushInfo(ag_trf('Start cost: {0}', self.cost_map.get(start, 'N/A')))
+            self.feedback.pushInfo(ag_trf('End cost: {0}', self.cost_map.get(end, 'N/A')))
         
         # Initialize A* with optimized data structures
         open_set = []  # Priority queue
@@ -365,10 +366,10 @@ class PathFinder:
                 elapsed = time() - calculation_started
                 
                 if self.feedback:
-                    self.feedback.pushInfo(f"Path found after {iterations} iterations")
-                    self.feedback.pushInfo(f"Path length: {len(path)} cells")
-                    self.feedback.pushInfo(f"Total cells visited: {len(closed_set)}")
-                    self.feedback.pushInfo(f"Pathfinding took {elapsed:.2f} seconds")
+                    self.feedback.pushInfo(ag_trf('Path found after {0} iterations', iterations))
+                    self.feedback.pushInfo(ag_trf('Path length: {0} cells', len(path)))
+                    self.feedback.pushInfo(ag_trf('Total cells visited: {0}', len(closed_set)))
+                    self.feedback.pushInfo(ag_trf('Pathfinding took {0:.2f} seconds', elapsed))
                 
                 return path, costs
             
@@ -392,11 +393,11 @@ class PathFinder:
         elapsed = time() - calculation_started
         if self.feedback:
             if iterations >= max_iterations:
-                self.feedback.pushInfo(f"Search terminated after {max_iterations} iterations")
+                self.feedback.pushInfo(ag_trf('Search terminated after {0} iterations', max_iterations))
             else:
-                self.feedback.pushInfo("No path found - all possible routes exhausted")
-            self.feedback.pushInfo(f"Cells visited: {len(closed_set)}")
-            self.feedback.pushInfo(f"Pathfinding took {elapsed:.2f} seconds")
+                self.feedback.pushInfo(ag_tr("No path found - all possible routes exhausted"))
+            self.feedback.pushInfo(ag_trf('Cells visited: {0}', len(closed_set)))
+            self.feedback.pushInfo(ag_trf('Pathfinding took {0:.2f} seconds', elapsed))
         
         return None
 
@@ -453,7 +454,7 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterEnum(
                 self.PARAM_OPTIMIZATION_LEVEL,
                 self.tr('Optimization Level'),
-                options=['Balanced', 'Speed Focus', 'Accuracy Focus', 'Flat Terrain Focus'],  # Added new option
+                options=[ag_tr('Balanced'), ag_tr('Speed Focus'), ag_tr('Accuracy Focus'), ag_tr('Flat Terrain Focus')],  # Added new option
                 defaultValue=0,
                 optional=True
             )
@@ -557,11 +558,11 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
             
             # Validate inputs
             if not cost_raster.isValid():
-                raise QgsProcessingException("Invalid Cost Raster")
+                raise QgsProcessingException(ag_tr("Invalid Cost Raster"))
 
             # Step 1: Prepare matrix
             multi_feedback.setCurrentStep(0)
-            multi_feedback.pushInfo(f"Step 1/{total_steps}: Preparing cost matrix...")
+            multi_feedback.pushInfo(ag_trf('Step 1/{0}: Preparing cost matrix...', total_steps))
             
             # Load raster data (only once)
             t_start = time()
@@ -569,18 +570,18 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
             matrix = [[None if block.isNoData(i, j) else abs(block.value(i, j)) for j in range(block.width())]
                       for i in range(block.height())]
             
-            multi_feedback.pushInfo(f"Raster loading took {time() - t_start:.2f} seconds")
+            multi_feedback.pushInfo(ag_trf('Raster loading took {0:.2f} seconds', time() - t_start))
             
             # Step 2: Find optimal path
             multi_feedback.setCurrentStep(1)
-            multi_feedback.pushInfo(f"Step 2/{total_steps}: Finding optimal path...")
+            multi_feedback.pushInfo(ag_trf('Step 2/{0}: Finding optimal path...', total_steps))
             
             # Convert points to raster coordinates
             start_row, start_col = self.point_to_raster_coordinates(point_start, cost_raster)
             end_row, end_col = self.point_to_raster_coordinates(point_end, cost_raster)
             
-            multi_feedback.pushInfo(f"Start point: ({point_start.x()}, {point_start.y()}) -> cell ({start_row}, {start_col})")
-            multi_feedback.pushInfo(f"End point: ({point_end.x()}, {point_end.y()}) -> cell ({end_row}, {end_col})")
+            multi_feedback.pushInfo(ag_trf('Start point: ({0}, {1}) -> cell ({2}, {3})', point_start.x(), point_start.y(), start_row, start_col))
+            multi_feedback.pushInfo(ag_trf('End point: ({0}, {1}) -> cell ({2}, {3})', point_end.x(), point_end.y(), end_row, end_col))
             
             # Normalize coordinates to be within bounds
             start_row = max(0, min(start_row, block.height() - 1))
@@ -607,15 +608,15 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
                 interm_row = max(0, min(interm_row, block.height() - 1))
                 interm_col = max(0, min(interm_col, block.width() - 1))
                 
-                multi_feedback.pushInfo(f"Intermediate point: ({point_intermediate.x()}, {point_intermediate.y()}) -> cell ({interm_row}, {interm_col})")
+                multi_feedback.pushInfo(ag_trf('Intermediate point: ({0}, {1}) -> cell ({2}, {3})', point_intermediate.x(), point_intermediate.y(), interm_row, interm_col))
                 
                 # Find first segment
-                multi_feedback.pushInfo("Finding path from start to intermediate point...")
+                multi_feedback.pushInfo(ag_tr("Finding path from start to intermediate point..."))
                 result_start_to_interm = pathfinder.find_path((start_row, start_col), (interm_row, interm_col))
                 
                 if not result_start_to_interm:
                     # Try with fallback parameters for intermediate segment
-                    multi_feedback.pushWarning("Initial path to intermediate point failed. Trying with different parameters...")
+                    multi_feedback.pushWarning(ag_tr("Initial path to intermediate point failed. Trying with different parameters..."))
                     
                     alt_pathfinder = PathFinder(
                         matrix, 
@@ -629,17 +630,17 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
                     result_start_to_interm = alt_pathfinder.find_path((start_row, start_col), (interm_row, interm_col))
                     
                     if not result_start_to_interm:
-                        raise QgsProcessingException("No path found between start and intermediate points. Try adjusting parameters or positions.")
+                        raise QgsProcessingException(ag_tr("No path found between start and intermediate points. Try adjusting parameters or positions."))
                 
                 path_part1, costs_part1 = result_start_to_interm
                 
                 # Find second segment
-                multi_feedback.pushInfo("Finding path from intermediate to end point...")
+                multi_feedback.pushInfo(ag_tr("Finding path from intermediate to end point..."))
                 result_interm_to_end = pathfinder.find_path((interm_row, interm_col), (end_row, end_col))
                 
                 if not result_interm_to_end:
                     # Try with fallback parameters for second segment
-                    multi_feedback.pushWarning("Initial path from intermediate to end failed. Trying with different parameters...")
+                    multi_feedback.pushWarning(ag_tr("Initial path from intermediate to end failed. Trying with different parameters..."))
                     
                     alt_pathfinder = PathFinder(
                         matrix, 
@@ -653,7 +654,7 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
                     result_interm_to_end = alt_pathfinder.find_path((interm_row, interm_col), (end_row, end_col))
                     
                     if not result_interm_to_end:
-                        raise QgsProcessingException("No path found between intermediate and end points. Try adjusting parameters or positions.")
+                        raise QgsProcessingException(ag_tr("No path found between intermediate and end points. Try adjusting parameters or positions."))
                 
                 path_part2, costs_part2 = result_interm_to_end
                 
@@ -667,12 +668,12 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
                 
             else:
                 # Direct path
-                multi_feedback.pushInfo("Finding direct path from start to end...")
+                multi_feedback.pushInfo(ag_tr("Finding direct path from start to end..."))
                 result = pathfinder.find_path((start_row, start_col), (end_row, end_col))
                 
                 if not result:
                     # Try alternative parameters if first attempt fails
-                    multi_feedback.pushWarning("Initial path finding failed. Trying with different parameters...")
+                    multi_feedback.pushWarning(ag_tr("Initial path finding failed. Trying with different parameters..."))
                     
                     # Better fallback parameters with enhanced flat terrain sensitivity
                     alt_param_sets = [
@@ -685,7 +686,7 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
                     ]
                     
                     for i, params in enumerate(alt_param_sets):
-                        multi_feedback.pushInfo(f"Trying alternate parameter set {i+1}...")
+                        multi_feedback.pushInfo(ag_trf('Trying alternate parameter set {0}...', i+1))
                         
                         alt_pathfinder = PathFinder(
                             matrix,
@@ -699,12 +700,12 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
                         result = alt_pathfinder.find_path((start_row, start_col), (end_row, end_col))
                         
                         if result:
-                            multi_feedback.pushInfo(f"Alternate parameter set {i+1} found a path!")
+                            multi_feedback.pushInfo(ag_trf('Alternate parameter set {0} found a path!', i+1))
                             break
                     
                     if not result:
                         # Try straight line approach as last resort
-                        multi_feedback.pushWarning("All alternative path finding failed. Trying simple line approach...")
+                        multi_feedback.pushWarning(ag_tr("All alternative path finding failed. Trying simple line approach..."))
                         path, costs = self.create_direct_line_path((start_row, start_col), (end_row, end_col), matrix)
                     else:
                         path, costs = result
@@ -713,7 +714,7 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
             
             # Step 3: Convert path to geometry
             multi_feedback.setCurrentStep(2)
-            multi_feedback.pushInfo(f"Step 3/{total_steps}: Creating output geometry...")
+            multi_feedback.pushInfo(ag_trf('Step 3/{0}: Creating output geometry...', total_steps))
 
             # Create fields for output
             fields = QgsFields()
@@ -731,7 +732,7 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
             )
 
             if sink is None:
-                raise QgsProcessingException("Failed to create output layer")
+                raise QgsProcessingException(ag_tr("Failed to create output layer"))
 
             # Convert raster coordinates to world coordinates
             path_points = self.raster_path_to_world_coordinates(path, cost_raster, point_start, point_end, 
@@ -740,14 +741,14 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
 
             # Critical validation: Ensure at least 2 points in the geometry
             if len(path_points) < 2:
-                raise QgsProcessingException("Path must contain at least 2 points to form a line.")
+                raise QgsProcessingException(ag_tr("Path must contain at least 2 points to form a line."))
 
             # Create geometry and validate
             line_geom = QgsGeometry.fromPolylineXY(path_points)
             if not line_geom.isGeosValid():
                 line_geom = line_geom.makeValid()
                 if line_geom.isEmpty():
-                    raise QgsProcessingException("Corrected geometry is empty.")
+                    raise QgsProcessingException(ag_tr("Corrected geometry is empty."))
 
             # Length calculation with CRS verification
             distance_area = QgsDistanceArea()
@@ -757,7 +758,7 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
             try:
                 path_length = distance_area.measureLength(line_geom)
             except Exception as e:
-                raise QgsProcessingException(f"Error calculating length: {str(e)}")
+                raise QgsProcessingException(ag_trf('Error calculating length: {0}', str(e)))
 
             # Safe attribute assignment
             feat = QgsFeature(fields)
@@ -774,18 +775,18 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
             sink.addFeature(feat, QgsFeatureSink.Flag.FastInsert)
 
             # Success message
-            multi_feedback.pushInfo(f"Path calculation complete!")
-            multi_feedback.pushInfo(f"Path length: {path_length:.2f} meters")
-            multi_feedback.pushInfo(f"Total cost: {costs[-1]:.2f}")
-            multi_feedback.pushInfo(f"Path segments: {len(path) - 1}")
-            multi_feedback.pushInfo(f"Flat terrain sensitivity: {flat_sensitivity:.2f}")
+            multi_feedback.pushInfo(ag_trf('Path calculation complete!'))
+            multi_feedback.pushInfo(ag_trf('Path length: {0:.2f} meters', path_length))
+            multi_feedback.pushInfo(ag_trf('Total cost: {0:.2f}', costs[-1]))
+            multi_feedback.pushInfo(ag_trf('Path segments: {0}', len(path) - 1))
+            multi_feedback.pushInfo(ag_trf('Flat terrain sensitivity: {0:.2f}', flat_sensitivity))
             
             return {self.OUTPUT_PATH: dest_id}
             
         except Exception as e:
             import traceback
             feedback.pushWarning(traceback.format_exc())
-            raise QgsProcessingException(f"Error in path calculation: {str(e)}")
+            raise QgsProcessingException(ag_trf('Error in path calculation: {0}', str(e)))
     
     def point_to_raster_coordinates(self, point, raster_layer):
         """Converts a point from world coordinates to raster coordinates"""
@@ -989,7 +990,7 @@ class FastOptimalPathAlgorithm(QgsProcessingAlgorithm):
         """)
     
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)
     
     def createInstance(self):
         return FastOptimalPathAlgorithm()

@@ -14,6 +14,7 @@ import tempfile
 import webbrowser
 from .basin_processes import calculate_parameters, get_basin_area_interpretation, get_mean_slope_interpretation
 from .hypsometric_curve import generate_hypsometric_curve
+from .translation import ag_tr, ag_trf
 
 class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
     INPUT_BASIN = 'INPUT_BASIN'
@@ -26,23 +27,23 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
     OUTPUT_HYPSOMETRIC = 'OUTPUT_HYPSOMETRIC'
 
     def initAlgorithm(self, config=None):
-        self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT_BASIN, 'Basin layer', [QgsProcessing.SourceType.TypeVectorPolygon]))
-        self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT_STREAMS, 'Stream network', [QgsProcessing.SourceType.TypeVectorLine]))
-        self.addParameter(QgsProcessingParameterField(self.STREAM_ORDER_FIELD, 'Field containing stream order (Strahler)', optional=False, parentLayerParameterName=self.INPUT_STREAMS))
-        self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_DEM, 'Digital Elevation Model'))
-        self.addParameter(QgsProcessingParameterNumber(self.PRECISION, 'Decimal precision', type=QgsProcessingParameterNumber.Type.Integer, minValue=0, maxValue=15, defaultValue=4))
+        self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT_BASIN, ag_tr('Basin layer'), [QgsProcessing.SourceType.TypeVectorPolygon]))
+        self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT_STREAMS, ag_tr('Stream network'), [QgsProcessing.SourceType.TypeVectorLine]))
+        self.addParameter(QgsProcessingParameterField(self.STREAM_ORDER_FIELD, ag_tr('Field containing stream order (Strahler)'), optional=False, parentLayerParameterName=self.INPUT_STREAMS))
+        self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_DEM, ag_tr('Digital Elevation Model')))
+        self.addParameter(QgsProcessingParameterNumber(self.PRECISION, ag_tr('Decimal precision'), type=QgsProcessingParameterNumber.Type.Integer, minValue=0, maxValue=15, defaultValue=4))
         self.addParameter(QgsProcessingParameterEnum(
             self.HYPSOMETRIC_METHOD,
-            'Hypsometric calculation method',
-            options=['QGIS Algorithm (Fast)', 'Pixel-by-Pixel (Precise)'],
+            ag_tr('Hypsometric calculation method'),
+            options=[ag_tr('QGIS Algorithm (Fast)'), ag_tr('Pixel-by-Pixel (Precise)')],
             defaultValue=0
         ))
         
-        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT, 'Morphometric Report', QgsProcessing.SourceType.TypeVector))
+        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT, ag_tr('Morphometric Report'), QgsProcessing.SourceType.TypeVector))
         self.addParameter(
             QgsProcessingParameterFileDestination(
                 self.OUTPUT_HYPSOMETRIC,
-                'Hypsometric Curve Output',
+                ag_tr('Hypsometric Curve Output'),
                 'HTML files (*.html)',
                 defaultValue=None,
                 optional=True
@@ -77,20 +78,17 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
             output_hypsometric = self.parameterAsFileOutput(parameters, self.OUTPUT_HYPSOMETRIC, context)
 
             if not basin_layer.isValid() or not streams_layer.isValid() or not dem_layer.isValid():
-                feedback.reportError('One or more input layers are invalid')
+                feedback.reportError(ag_tr('One or more input layers are invalid'))
                 return {}
 
             if basin_layer.crs() != streams_layer.crs() or basin_layer.crs() != dem_layer.crs():
-                feedback.reportError('Input layers have different Coordinate Reference Systems (CRS)')
+                feedback.reportError(ag_tr('Input layers have different Coordinate Reference Systems (CRS)'))
                 return {}
 
             crs = basin_layer.crs()
             if crs.isGeographic():
                 feedback.reportError(
-                    f'The CRS "{crs.authid()} - {crs.description()}" uses geographic coordinates (degrees). '
-                    'All input layers must be in a projected coordinate system (meters) for morphometric '
-                    'calculations to be correct. Please reproject your layers to a suitable projected CRS '
-                    '(e.g. UTM) before running this tool.'
+                    ag_trf('The CRS "{0} - {1}" uses geographic coordinates (degrees). All input layers must be in a projected coordinate system (meters) for morphometric calculations to be correct. Please reproject your layers to a suitable projected CRS (e.g. UTM) before running this tool.', crs.authid(), crs.description())
                 )
                 return {}
 
@@ -102,11 +100,10 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
                 is_meters = True  # cannot determine, allow through
             if not is_meters:
                 feedback.pushWarning(
-                    f'Warning: The CRS "{crs.authid()}" map units are not meters. '
-                    'Results involving area, length, and slope may be in unexpected units.'
+                    ag_trf('Warning: The CRS "{0}" map units are not meters. Results involving area, length, and slope may be in unexpected units.', crs.authid())
                 )
 
-            feedback.pushInfo('Processing morphometric analysis...')
+            feedback.pushInfo(ag_tr('Processing morphometric analysis...'))
 
             dem_clipped = self.clip_dem_by_basin(dem_layer, basin_layer, context, feedback)
             slope_layer = self.calculate_slope(dem_clipped, context, feedback)
@@ -120,7 +117,7 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
             results = calculate_parameters(basin_layer, streams_layer, dem_clipped, pour_point, stream_order_field, mean_slope_degrees, feedback)
             
             if results is None:
-                feedback.reportError("Failed to calculate basin parameters")
+                feedback.reportError(ag_tr("Failed to calculate basin parameters"))
                 return {}
 
             fields = QgsFields()
@@ -135,10 +132,10 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
                 feature = QgsFeature()
                 feature.setFields(fields)
                 feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(pour_point)))
-                feature.setAttribute("Parameter", param)
+                feature.setAttribute("Parameter", ag_tr(param))
                 feature.setAttribute("Value", self.round_or_null(details['value'], precision))
-                feature.setAttribute("Unit", details['unit'])
-                feature.setAttribute("Interpretation", details['interpretation'])
+                feature.setAttribute("Unit", ag_tr(details['unit']))
+                feature.setAttribute("Interpretation", ag_tr(details['interpretation']))
                 sink.addFeature(feature, QgsFeatureSink.Flag.FastInsert)
 
             hypsometric_output_dir = os.path.dirname(output_hypsometric) if output_hypsometric else QgsProcessingUtils.tempFolder()
@@ -148,10 +145,10 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
                 hi_feature = QgsFeature()
                 hi_feature.setFields(fields)
                 hi_feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(pour_point)))
-                hi_feature.setAttribute("Parameter", "Hypsometric Integral (HI)")
+                hi_feature.setAttribute("Parameter", ag_tr("Hypsometric Integral (HI)"))
                 hi_feature.setAttribute("Value", self.round_or_null(hypsometric_results['HI'], precision))
-                hi_feature.setAttribute("Unit", "dimensionless")
-                hi_feature.setAttribute("Interpretation", hypsometric_results['STAGE'])
+                hi_feature.setAttribute("Unit", ag_tr("dimensionless"))
+                hi_feature.setAttribute("Interpretation", ag_tr(hypsometric_results['STAGE']))
                 sink.addFeature(hi_feature, QgsFeatureSink.Flag.FastInsert)
 
             if hypsometric_results and 'HTML' in hypsometric_results and hypsometric_results['HTML']:
@@ -160,9 +157,9 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
                     url = 'file://' + os.path.abspath(html_path)
                     webbrowser.open(url)
                 except Exception as e:
-                    feedback.pushInfo(f"Could not open HTML report automatically: {str(e)}")
+                    feedback.pushInfo(ag_trf('Could not open HTML report automatically: {0}', str(e)))
 
-            feedback.pushInfo('Analysis completed successfully')
+            feedback.pushInfo(ag_tr('Analysis completed successfully'))
 
             return {
                 self.OUTPUT: dest_id,
@@ -170,7 +167,7 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
             }
 
         except Exception as e:
-            feedback.reportError(f"An error occurred: {str(e)}")
+            feedback.reportError(ag_trf('An error occurred: {0}', str(e)))
             import traceback
             feedback.pushInfo(traceback.format_exc())
             return {}
@@ -228,7 +225,7 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
         return 'basinanalysis'
 
     def displayName(self):
-        return 'Watershed Morphometric Analysis'
+        return ag_tr('Watershed Morphometric Analysis')
 
     def group(self):
         return 'ArcGeek Calculator'
@@ -237,7 +234,7 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
         return 'arcgeekcalculator'
 
     def shortHelpString(self):
-        return """
+        return ag_tr("""
         This algorithm performs a comprehensive analysis of a hydrological basin.
         It calculates various morphometric parameters and provides interpretations.
 
@@ -254,7 +251,7 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
             Hypsometric Curve Output: HTML file containing the hypsometric curve visualization
 
         Note: All input layers must have the same Coordinate Reference System (CRS).
-        """
+        """)
 
     def createInstance(self):
         return BasinAnalysisAlgorithm()

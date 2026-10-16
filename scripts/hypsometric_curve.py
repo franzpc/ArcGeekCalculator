@@ -10,6 +10,7 @@ import os
 import csv
 import platform
 import math
+from .translation import ag_tr, ag_trf
 
 # ===== LAZY LOADING SYSTEM =====
 # Plotly will be imported only when the tool is executed
@@ -46,11 +47,11 @@ def _get_plotly_missing_message():
 
 def get_basin_stage(hi):
     if hi >= 0.60:
-        return "Young stage"
+        return ag_tr("Young stage")
     elif 0.35 <= hi < 0.60:
-        return "Mature stage"
+        return ag_tr("Mature stage")
     else:
-        return "Old stage"
+        return ag_tr("Old stage")
 
 def calculate_hypsometric_integral(elevation, area):
     sorted_pairs = sorted(zip(elevation, area), reverse=True)
@@ -131,8 +132,8 @@ def extract_pixel_values_from_basin(dem_layer, basin_layer, feedback):
         x_res = dem_layer.rasterUnitsPerPixelX()
         y_res = dem_layer.rasterUnitsPerPixelY()
         
-        feedback.pushInfo(f"DEM dimensions: {dem_width} x {dem_height}")
-        feedback.pushInfo(f"Pixel resolution: {x_res:.3f} x {y_res:.3f}")
+        feedback.pushInfo(ag_trf('DEM dimensions: {0} x {1}', dem_width, dem_height))
+        feedback.pushInfo(ag_trf('Pixel resolution: {0:.3f} x {1:.3f}', x_res, y_res))
         
         basin_geom = None
         for feature in basin_layer.getFeatures():
@@ -142,7 +143,7 @@ def extract_pixel_values_from_basin(dem_layer, basin_layer, feedback):
                 basin_geom = basin_geom.combine(feature.geometry())
         
         if basin_geom is None:
-            feedback.reportError("No basin geometry found")
+            feedback.reportError(ag_tr("No basin geometry found"))
             return None
         
         elevation_values = []
@@ -168,18 +169,18 @@ def extract_pixel_values_from_basin(dem_layer, basin_layer, feedback):
                 
                 total_pixels += 1
         
-        feedback.pushInfo(f"Total pixels processed: {total_pixels}")
-        feedback.pushInfo(f"Pixels in basin: {pixels_in_basin}")
-        feedback.pushInfo(f"Valid elevation values: {len(elevation_values)}")
+        feedback.pushInfo(ag_trf('Total pixels processed: {0}', total_pixels))
+        feedback.pushInfo(ag_trf('Pixels in basin: {0}', pixels_in_basin))
+        feedback.pushInfo(ag_trf('Valid elevation values: {0}', len(elevation_values)))
         
         if len(elevation_values) < 10:
-            feedback.reportError("Insufficient elevation data for hypsometric analysis")
+            feedback.reportError(ag_tr("Insufficient elevation data for hypsometric analysis"))
             return None
         
         return elevation_values
     
     except Exception as e:
-        feedback.reportError(f"Error extracting pixel values: {str(e)}")
+        feedback.reportError(ag_trf('Error extracting pixel values: {0}', str(e)))
         return None
 
 def generate_hypsometric_curve_qgis(dem_layer, basin_layer, output_folder, feedback):
@@ -198,12 +199,12 @@ def generate_hypsometric_curve_qgis(dem_layer, basin_layer, output_folder, feedb
 
         csv_files = [f for f in os.listdir(output_folder) if f.startswith('histogram_') and f.endswith('.csv')]
         if not csv_files:
-            feedback.reportError("No histogram CSV file found in the output directory.")
+            feedback.reportError(ag_tr("No histogram CSV file found in the output directory."))
             return None
 
         csv_files.sort(key=lambda x: os.path.getmtime(os.path.join(output_folder, x)), reverse=True)
         csv_file = os.path.join(output_folder, csv_files[0])
-        feedback.pushInfo(f"Using most recent histogram file: {csv_file}")
+        feedback.pushInfo(ag_trf('Using most recent histogram file: {0}', csv_file))
 
         try:
             with open(csv_file, 'r') as f:
@@ -219,7 +220,7 @@ def generate_hypsometric_curve_qgis(dem_layer, basin_layer, output_folder, feedb
 
             hi = calculate_hypsometric_integral(elevation, area)
             stage = get_basin_stage(hi)
-            feedback.pushInfo(f"Calculated Hypsometric Integral: {hi:.3f} ({stage})")
+            feedback.pushInfo(ag_trf('Calculated Hypsometric Integral: {0:.3f} ({1})', hi, stage))
 
             min_elev, max_elev = min(elevation), max(elevation)
             relative_height = [(e - min_elev) / (max_elev - min_elev) for e in elevation]
@@ -247,12 +248,12 @@ def generate_hypsometric_curve_qgis(dem_layer, basin_layer, output_folder, feedb
 
             if _check_plotly_dependency():
                 create_interactive_html(relative_area, relative_height, area, elevation, curve_color, point_color, output_folder, hi, total_area_km2, stage, 0)
-                feedback.pushInfo("Interactive hypsometric curve (HTML) generated.")
+                feedback.pushInfo(ag_tr("Interactive hypsometric curve (HTML) generated."))
             else:
-                feedback.pushInfo("Plotly is not installed; interactive version not generated.")
+                feedback.pushInfo(ag_tr("Plotly is not installed; interactive version not generated."))
 
-            feedback.pushInfo(f"Processed data saved to: {processed_csv}")
-            feedback.pushInfo(f"Hypsometric curve analysis completed. Results in: {output_folder}")
+            feedback.pushInfo(ag_trf('Processed data saved to: {0}', processed_csv))
+            feedback.pushInfo(ag_trf('Hypsometric curve analysis completed. Results in: {0}', output_folder))
             
             return {
                 'CSV': processed_csv,
@@ -264,16 +265,16 @@ def generate_hypsometric_curve_qgis(dem_layer, basin_layer, output_folder, feedb
             }
 
         except Exception as e:
-            feedback.reportError(f"Error processing CSV file: {str(e)}")
+            feedback.reportError(ag_trf('Error processing CSV file: {0}', str(e)))
             return None
 
     except Exception as e:
-        feedback.reportError(f"Error in generate_hypsometric_curve: {str(e)}")
+        feedback.reportError(ag_trf('Error in generate_hypsometric_curve: {0}', str(e)))
         return None
 
 def generate_hypsometric_curve_pixel(dem_layer, basin_layer, output_folder, feedback):
     try:
-        feedback.pushInfo("Starting pixel-by-pixel hypsometric analysis...")
+        feedback.pushInfo(ag_tr("Starting pixel-by-pixel hypsometric analysis..."))
         
         elevation_values = extract_pixel_values_from_basin(dem_layer, basin_layer, feedback)
         if elevation_values is None:
@@ -281,11 +282,11 @@ def generate_hypsometric_curve_pixel(dem_layer, basin_layer, output_folder, feed
         
         hi = calculate_hypsometric_integral_pixel_method(elevation_values)
         if hi is None:
-            feedback.reportError("Failed to calculate hypsometric integral")
+            feedback.reportError(ag_tr("Failed to calculate hypsometric integral"))
             return None
         
         stage = get_basin_stage(hi)
-        feedback.pushInfo(f"Calculated Hypsometric Integral: {hi:.3f} ({stage})")
+        feedback.pushInfo(ag_trf('Calculated Hypsometric Integral: {0:.3f} ({1})', hi, stage))
         
         basin_area_m2 = sum([f.geometry().area() for f in basin_layer.getFeatures()])
         total_area_km2 = basin_area_m2 / 1e6
@@ -320,12 +321,12 @@ def generate_hypsometric_curve_pixel(dem_layer, basin_layer, output_folder, feed
         
         if _check_plotly_dependency():
             create_interactive_html(relative_area, relative_height, area_m2, elevation_simplified, curve_color, point_color, output_folder, hi, total_area_km2, stage, 1)
-            feedback.pushInfo("Interactive hypsometric curve (HTML) generated.")
+            feedback.pushInfo(ag_tr("Interactive hypsometric curve (HTML) generated."))
         else:
-            feedback.pushInfo("Plotly is not installed; interactive version not generated.")
+            feedback.pushInfo(ag_tr("Plotly is not installed; interactive version not generated."))
         
-        feedback.pushInfo(f"Processed data saved to: {processed_csv}")
-        feedback.pushInfo(f"Hypsometric curve analysis completed. Results in: {output_folder}")
+        feedback.pushInfo(ag_trf('Processed data saved to: {0}', processed_csv))
+        feedback.pushInfo(ag_trf('Hypsometric curve analysis completed. Results in: {0}', output_folder))
         
         return {
             'CSV': processed_csv,
@@ -337,7 +338,7 @@ def generate_hypsometric_curve_pixel(dem_layer, basin_layer, output_folder, feed
         }
     
     except Exception as e:
-        feedback.reportError(f"Error in generate_hypsometric_curve: {str(e)}")
+        feedback.reportError(ag_trf('Error in generate_hypsometric_curve: {0}', str(e)))
         return None
 
 def generate_hypsometric_curve(dem_layer, basin_layer, output_folder, feedback, method=0):
@@ -424,14 +425,14 @@ def create_static_image(relative_area, relative_height, curve_color, point_color
     painter.drawText(
         QRectF(width/2 - 300, 10, 600, 30), 
         align_center,
-        f"Hypsometric Curve (HI = {hi:.3f} - {stage}, Area = {total_area_km2:.2f} km²)"
+        ag_trf('Hypsometric Curve (HI = {0:.3f} - {1}, Area = {2:.2f} km²)', hi, stage, total_area_km2)
     )
     
     painter.setFont(QFont('Arial', 10))
     painter.drawText(
         QRectF(width/2 - 100, height - 25, 200, 20), 
         align_center,
-        "Relative area (a/A)"
+        ag_tr("Relative area (a/A)")
     )
     
     painter.save()
@@ -440,7 +441,7 @@ def create_static_image(relative_area, relative_height, curve_color, point_color
     painter.drawText(
         QRectF(-100, -30, 200, 60), 
         align_center,
-        "Relative height (h/H)"
+        ag_tr("Relative height (h/H)")
     )
     painter.restore()
     
@@ -468,21 +469,21 @@ def create_interactive_html(relative_area, relative_height, area, elevation, cur
     fig.add_trace(go.Scatter(
         x=x_ref, y=y_young, 
         mode='lines', 
-        name='Young stage', 
+        name=ag_tr('Young stage'), 
         line=dict(color='#FF6B6B', width=1, dash='dash')
     ), row=1, col=1)
     
     fig.add_trace(go.Scatter(
         x=x_ref, y=y_mature, 
         mode='lines', 
-        name='Mature stage', 
+        name=ag_tr('Mature stage'), 
         line=dict(color='#4ECDC4', width=1, dash='dot')
     ), row=1, col=1)
     
     fig.add_trace(go.Scatter(
         x=x_ref, y=y_old, 
         mode='lines', 
-        name='Old stage', 
+        name=ag_tr('Old stage'), 
         line=dict(color='#2ECC71', width=1, dash='dashdot')
     ), row=1, col=1)
     
@@ -490,26 +491,26 @@ def create_interactive_html(relative_area, relative_height, area, elevation, cur
         x=relative_area, 
         y=relative_height, 
         mode='lines', 
-        name='Hypsometric Curve',
+        name=ag_tr('Hypsometric Curve'),
         line=dict(color=f'rgb{curve_color.getRgb()[:3]}', width=3),
-        hovertemplate='a/A: %{x:.3f}<br>h/H: %{y:.3f}<extra></extra>'
+        hovertemplate=ag_tr('a/A: %{x:.3f}<br>h/H: %{y:.3f}<extra></extra>')
     ), row=1, col=1)
     
     fig.add_trace(go.Scatter(
         x=relative_area, 
         y=relative_height, 
         mode='markers', 
-        name='Data points',
+        name=ag_tr('Data points'),
         marker=dict(color=f'rgb{point_color.getRgb()[:3]}', size=8),
-        hovertemplate='a/A: %{x:.3f}<br>h/H: %{y:.3f}<extra></extra>',
+        hovertemplate=ag_tr('a/A: %{x:.3f}<br>h/H: %{y:.3f}<extra></extra>'),
         visible='legendonly'
     ), row=1, col=1) if method == 0 else fig.add_trace(go.Scatter(
         x=[relative_area[i] for i in range(0, len(relative_area), len(relative_area)//20)],
         y=[relative_height[i] for i in range(0, len(relative_height), len(relative_height)//20)],
         mode='markers', 
-        name='Data points',
+        name=ag_tr('Data points'),
         marker=dict(color=f'rgb{point_color.getRgb()[:3]}', size=8),
-        hovertemplate='a/A: %{x:.3f}<br>h/H: %{y:.3f}<extra></extra>',
+        hovertemplate=ag_tr('a/A: %{x:.3f}<br>h/H: %{y:.3f}<extra></extra>'),
         visible='legendonly'
     ), row=1, col=1)
     
@@ -529,9 +530,9 @@ def create_interactive_html(relative_area, relative_height, area, elevation, cur
             y=elevation,
             x=[a/1e6 for a in areas_diff],
             orientation='h',
-            name='Elevation Distribution',
+            name=ag_tr('Elevation Distribution'),
             marker=dict(color=f'rgb{curve_color.getRgb()[:3]}'),
-            hovertemplate='Area: %{x:.2f} km² (%{customdata:.1f}%)<br>Elevation: %{y:.1f} m<extra></extra>',
+            hovertemplate=ag_tr('Area: %{x:.2f} km² (%{customdata:.1f}%)<br>Elevation: %{y:.1f} m<extra></extra>'),
             customdata=percentages
         ), row=1, col=2)
     else:
@@ -574,20 +575,20 @@ def create_interactive_html(relative_area, relative_height, area, elevation, cur
             y=binned_elevation,
             x=[a/1e6 for a in binned_area],
             orientation='h',
-            name='Elevation Distribution',
+            name=ag_tr('Elevation Distribution'),
             marker=dict(color=f'rgb{curve_color.getRgb()[:3]}'),
-            hovertemplate='Area: %{x:.2f} km² (%{customdata:.1f}%)<br>Elevation: %{y:.1f} m<extra></extra>',
+            hovertemplate=ag_tr('Area: %{x:.2f} km² (%{customdata:.1f}%)<br>Elevation: %{y:.1f} m<extra></extra>'),
             customdata=binned_percentages
         ), row=1, col=2)
     
     fig.update_layout(
-        title_text=f"Hypsometric Curve (HI = {hi:.3f} - {stage}, Area = {total_area_km2:.2f} km²)",
+        title_text=ag_trf('Hypsometric Curve (HI = {0:.3f} - {1}, Area = {2:.2f} km²)', hi, stage, total_area_km2),
         showlegend=True,
         plot_bgcolor='white'
     )
     
     fig.update_xaxes(
-        title_text="Relative area (a/A)",
+        title_text=ag_tr("Relative area (a/A)"),
         range=[0, 1],
         row=1, col=1,
         showgrid=False,
@@ -598,7 +599,7 @@ def create_interactive_html(relative_area, relative_height, area, elevation, cur
     )
     
     fig.update_yaxes(
-        title_text="Relative height (h/H)",
+        title_text=ag_tr("Relative height (h/H)"),
         range=[0, 1],
         row=1, col=1,
         showgrid=False,
@@ -609,7 +610,7 @@ def create_interactive_html(relative_area, relative_height, area, elevation, cur
     )
     
     fig.update_xaxes(
-        title_text="Area (km²)",
+        title_text=ag_tr("Area (km²)"),
         row=1, col=2,
         showgrid=False,
         zeroline=True,
@@ -619,7 +620,7 @@ def create_interactive_html(relative_area, relative_height, area, elevation, cur
     )
     
     fig.update_yaxes(
-        title_text="Elevation (m)",
+        title_text=ag_tr("Elevation (m)"),
         row=1, col=2,
         showgrid=False,
         zeroline=True,

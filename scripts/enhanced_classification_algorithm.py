@@ -16,6 +16,7 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import QCoreApplication
 import os
+from .translation import ag_tr, ag_trf
 
 # Lazy loading flags - libraries will be imported only when needed
 # This prevents QGIS from freezing during plugin initialization
@@ -82,7 +83,7 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a translatable string with the self.tr() function.
         """
-        return QCoreApplication.translate("Processing", string)
+        return ag_tr(string)
 
     def createInstance(self):
         return EnhancedClassificationAlgorithm()
@@ -151,7 +152,7 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterEnum(
                 self.ALGORITHM_TYPE,
                 self.tr("Classification Algorithm"),
-                options=["Random Forest", "Gaussian Mixture Model", "Support Vector Machine", "K-Nearest Neighbors"],
+                options=[ag_tr("Random Forest"), ag_tr("Gaussian Mixture Model"), ag_tr("Support Vector Machine"), ag_tr("K-Nearest Neighbors")],
                 defaultValue=0
             )
         )
@@ -267,20 +268,20 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
             from sklearn.model_selection import cross_val_score
             
             if feedback:
-                feedback.pushInfo(f"Performing {cv_folds}-fold cross-validation...")
+                feedback.pushInfo(ag_trf('Performing {0}-fold cross-validation...', cv_folds))
             
             cv_scores = cross_val_score(classifier, X, y, cv=cv_folds, scoring='accuracy')
             cv_mean = cv_scores.mean()
             cv_std = cv_scores.std()
             
             if feedback:
-                feedback.pushInfo(f"Cross-validation results: {cv_mean:.4f} ± {cv_std:.4f}")
-                feedback.pushInfo(f"Individual fold scores: {[f'{score:.4f}' for score in cv_scores]}")
+                feedback.pushInfo(ag_trf('Cross-validation results: {0:.4f} ± {1:.4f}', cv_mean, cv_std))
+                feedback.pushInfo(ag_trf('Individual fold scores: {0}', [f'{score:.4f}' for score in cv_scores]))
             
             return cv_mean, cv_std, cv_scores
         except Exception as e:
             if feedback:
-                feedback.pushWarning(f"Cross-validation failed: {str(e)}")
+                feedback.pushWarning(ag_trf('Cross-validation failed: {0}', str(e)))
             return None, None, None
 
     def processAlgorithm(self, parameters, context, feedback):
@@ -323,7 +324,7 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
             raise QgsProcessingException(self.invalidSourceError(parameters, self.SOURCE_IMAGE))
 
         # Extract data and preparation
-        feedback.pushInfo("🔍 Extracting image properties...")
+        feedback.pushInfo(ag_tr("🔍 Extracting image properties..."))
         extent = sourceImage.extent()
         xmin = extent.xMinimum()
         ymax = extent.yMaximum()
@@ -335,29 +336,28 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
         if num_bands < 1:
             raise QgsProcessingException(self.tr("Invalid raster: no bands found"))
             
-        feedback.pushInfo(f"📊 Image info: {sourceImage.width()}x{sourceImage.height()} pixels, {num_bands} bands")
+        feedback.pushInfo(ag_trf('📊 Image info: {0}x{1} pixels, {2} bands', sourceImage.width(), sourceImage.height(), num_bands))
         
         # Scientific validation: Check if multiband for meaningful classification
         if num_bands == 1:
-            feedback.pushWarning("⚠️ Single-band image detected. For optimal classification results, use multiband imagery.")
+            feedback.pushWarning(ag_tr("⚠️ Single-band image detected. For optimal classification results, use multiband imagery."))
         
         # Validate minimum sample size according to scientific standards
         min_recommended_samples = max(10 * num_bands, 30)
         total_features = source.featureCount()
         if total_features < min_recommended_samples:
-            feedback.pushWarning(f"⚠️ Sample size warning: {total_features} training points available. "
-                                f"Recommended minimum: {min_recommended_samples} points for {num_bands} bands.")
+            feedback.pushWarning(ag_trf('⚠️ Sample size warning: {0} training points available. Recommended minimum: {1} points for {2} bands.', total_features, min_recommended_samples, num_bands))
 
         label_field_index = source.fields().indexFromName(field_name)
         if label_field_index < 0:
-            raise QgsProcessingException(f"No attribute named '{field_name}' in the training layer")
+            raise QgsProcessingException(ag_trf("No attribute named '{0}' in the training layer", field_name))
 
         # Coordinate transform between vector and raster
         transform = QgsCoordinateTransform(
             source.sourceCrs(), sourceImage.crs(), context.project()
         )
 
-        feedback.pushInfo("📍 Collecting training data...")
+        feedback.pushInfo(ag_tr("📍 Collecting training data..."))
         # Collection of training data
         classes = {}
         feature_list = []
@@ -374,7 +374,7 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
                     
                     # Skip features with NULL class values
                     if class_title is None:
-                        feedback.pushWarning(f"Skipping point with NULL classification value at {point.toString()}")
+                        feedback.pushWarning(ag_trf('Skipping point with NULL classification value at {0}', point.toString()))
                         continue
                         
                     # Add to class dictionary if new
@@ -393,13 +393,13 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
                             # Skip if band value is None or NaN
                             if band_value is None or (isinstance(band_value, float) and np.isnan(band_value)):
                                 valid_point = False
-                                feedback.pushWarning(f"Skipping point with NULL band value at {point.toString()}")
+                                feedback.pushWarning(ag_trf('Skipping point with NULL band value at {0}', point.toString()))
                                 break
                                 
                             values.append(band_value)
                         else:
                             valid_point = False
-                            feedback.pushWarning(f"Band {band} not found in raster results at {point.toString()}")
+                            feedback.pushWarning(ag_trf('Band {0} not found in raster results at {1}', band, point.toString()))
                             break
                     
                     # Only add if all bands have valid values
@@ -409,27 +409,26 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
                     
                 else:
                     feedback.pushWarning(
-                        f"Could not identify raster values at point {feature.geometry().asWkt()}"
+                        ag_trf('Could not identify raster values at point {0}', feature.geometry().asWkt())
                     )
             except Exception as e:
-                feedback.pushWarning(f"Error processing point {feature.id()}: {str(e)}")
+                feedback.pushWarning(ag_trf('Error processing point {0}: {1}', feature.id(), str(e)))
                 continue
 
         # Check if we have enough training data
         if len(feature_list) < 5:
             raise QgsProcessingException(self.tr("Not enough valid training points found. At least 5 points are required."))
             
-        feedback.pushInfo(f"✅ Collected {len(feature_list)} training samples in {len(classes)} classes.")
+        feedback.pushInfo(ag_trf('✅ Collected {0} training samples in {1} classes.', len(feature_list), len(classes)))
         
         # Scientific validation: Check class balance
         unique_classes, class_counts = np.unique([f[-1] for f in feature_list], return_counts=True)
         min_class_samples = min(class_counts)
         if min_class_samples < max(10, num_bands):
-            feedback.pushWarning(f"⚠️ Smallest class has only {min_class_samples} samples. "
-                                f"Recommended minimum: {max(10, num_bands)} per class.")
+            feedback.pushWarning(ag_trf('⚠️ Smallest class has only {0} samples. Recommended minimum: {1} per class.', min_class_samples, max(10, num_bands)))
 
         # Prepare data for training
-        feedback.pushInfo("🔧 Preparing data for analysis...")
+        feedback.pushInfo(ag_tr("🔧 Preparing data for analysis..."))
         feature_array = np.array(feature_list)
         pixelSizeX = sourceImage.rasterUnitsPerPixelX()
         pixelSizeY = sourceImage.rasterUnitsPerPixelY()
@@ -437,7 +436,7 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
         height = sourceImage.height()
         
         # Extract raster data with progress updates
-        feedback.pushInfo(f"📖 Reading {num_bands} raster bands...")
+        feedback.pushInfo(ag_trf('📖 Reading {0} raster bands...', num_bands))
         try:
             # Use GDAL for reliable raster reading
             gdal_dataset = gdal.Open(sourceImage.source())
@@ -450,19 +449,19 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
                     return {}
                     
                 feedback.setProgress(int((i-1) * 20 / num_bands))
-                feedback.pushInfo(f"Reading band {i} of {num_bands}...")
+                feedback.pushInfo(ag_trf('Reading band {0} of {1}...', i, num_bands))
                 band = gdal_dataset.GetRasterBand(i)
                 band_data = band.ReadAsArray()
                 if band_data is None:
-                    raise QgsProcessingException(self.tr(f"Failed to read band {i} - it may be too large or corrupted."))
+                    raise QgsProcessingException(ag_trf('Failed to read band {0} - it may be too large or corrupted.', i))
                 dataArray.append(band_data)
             
             # Convert to numpy array
             dataArray = np.array(dataArray)
-            feedback.pushInfo(f"📊 Raster data shape: {dataArray.shape}")
+            feedback.pushInfo(ag_trf('📊 Raster data shape: {0}', dataArray.shape))
             
         except Exception as e:
-            feedback.reportError(f"Error reading raster data: {str(e)}")
+            feedback.reportError(ag_trf('Error reading raster data: {0}', str(e)))
             raise QgsProcessingException(self.tr("Failed to read raster data. Try using a smaller image or a different format."))
         
         # Validate raster shape
@@ -472,45 +471,45 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
         # Get dimensions and reshape
         if len(dataArray.shape) == 3:
             bands, height, width = dataArray.shape
-            feedback.pushInfo(f"📊 Multi-band image: {bands} bands, {height}x{width} pixels")
+            feedback.pushInfo(ag_trf('📊 Multi-band image: {0} bands, {1}x{2} pixels', bands, height, width))
         else:
             # Handle single band images
             height, width = dataArray.shape
             bands = 1
             dataArray = dataArray.reshape(1, height, width)
-            feedback.pushInfo(f"📊 Single-band image: {height}x{width} pixels")
+            feedback.pushInfo(ag_trf('📊 Single-band image: {0}x{1} pixels', height, width))
         
         # Check if bands count matches
         if bands != num_bands:
-            feedback.pushWarning(f"⚠️ Band count mismatch - metadata says {num_bands}, actual data has {bands} bands")
+            feedback.pushWarning(ag_trf('⚠️ Band count mismatch - metadata says {0}, actual data has {1} bands', num_bands, bands))
         
-        feedback.pushInfo("🔄 Reshaping image data for analysis...")  
+        feedback.pushInfo(ag_tr("🔄 Reshaping image data for analysis..."))  
         try:
             # Reshape to have each pixel as a row and each band as a column
             reshaped_image = dataArray.reshape(bands, height * width).T
-            feedback.pushInfo(f"📊 Reshaped data size: {reshaped_image.shape}")
+            feedback.pushInfo(ag_trf('📊 Reshaped data size: {0}', reshaped_image.shape))
         except Exception as e:
-            feedback.reportError(f"Error reshaping data: {str(e)}")
-            raise QgsProcessingException(self.tr(f"Failed to reshape raster data: {str(e)}"))
+            feedback.reportError(ag_trf('Error reshaping data: {0}', str(e)))
+            raise QgsProcessingException(ag_trf('Failed to reshape raster data: {0}', str(e)))
 
         # Prepare training and test sets
-        feedback.pushInfo("📊 Preparing training and test data...")
+        feedback.pushInfo(ag_tr("📊 Preparing training and test data..."))
         X = feature_array[:, 0:bands]
         y = feature_array[:, -1]
         
-        feedback.pushInfo(f"📈 Training data: {X.shape}, labels: {y.shape}")
-        feedback.pushInfo(f"📊 Class distribution: {dict(zip(*np.unique(y, return_counts=True)))}")
-        feedback.pushInfo(f"🔀 Splitting data with test size: {test_size}")
+        feedback.pushInfo(ag_trf('📈 Training data: {0}, labels: {1}', X.shape, y.shape))
+        feedback.pushInfo(ag_trf('📊 Class distribution: {0}', dict(zip(*np.unique(y, return_counts=True)))))
+        feedback.pushInfo(ag_trf('🔀 Splitting data with test size: {0}', test_size))
         
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=7)
-        feedback.pushInfo(f"📊 Training set: {X_train.shape}, Test set: {X_test.shape}")
+        feedback.pushInfo(ag_trf('📊 Training set: {0}, Test set: {1}', X_train.shape, X_test.shape))
 
         # Select and initialize the classifier
         feedback.setProgress(30)
-        feedback.pushInfo("🤖 Training the classifier...")
+        feedback.pushInfo(ag_tr("🤖 Training the classifier..."))
         
         if algorithm_type == 0:  # Random Forest
-            feedback.pushInfo(f"🌲 Using Random Forest Classifier with {n_estimators} estimators")
+            feedback.pushInfo(ag_trf('🌲 Using Random Forest Classifier with {0} estimators', n_estimators))
             classifier = RandomForestClassifier(n_estimators=n_estimators, random_state=7)
             classifier.fit(X_train, y_train)
             y_ts = classifier.predict(X_test)
@@ -518,10 +517,10 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
             # Feature importance analysis
             feature_importance = classifier.feature_importances_
             for i, importance in enumerate(feature_importance):
-                feedback.pushInfo(f"📊 Band {i+1} importance: {importance:.4f}")
+                feedback.pushInfo(ag_trf('📊 Band {0} importance: {1:.4f}', i+1, importance))
                 
         elif algorithm_type == 1:  # Gaussian Mixture Model
-            feedback.pushInfo("🔄 Using Gaussian Mixture Model")
+            feedback.pushInfo(ag_tr("🔄 Using Gaussian Mixture Model"))
             # GMM is a generative model that needs to be adapted for classification
             n_classes = len(classes)
             classifier = GaussianMixture(n_components=n_classes, random_state=7)
@@ -531,14 +530,14 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
             feature_importance = None
             
         elif algorithm_type == 2:  # Support Vector Machine
-            feedback.pushInfo("⚡ Using Support Vector Machine")
+            feedback.pushInfo(ag_tr("⚡ Using Support Vector Machine"))
             classifier = SVC(kernel='rbf', random_state=7)
             classifier.fit(X_train, y_train)
             y_ts = classifier.predict(X_test)
             feature_importance = None
             
         elif algorithm_type == 3:  # K-Nearest Neighbors
-            feedback.pushInfo("🎯 Using K-Nearest Neighbors")
+            feedback.pushInfo(ag_tr("🎯 Using K-Nearest Neighbors"))
             classifier = KNeighborsClassifier(n_neighbors=5)
             classifier.fit(X_train, y_train)
             y_ts = classifier.predict(X_test)
@@ -552,20 +551,20 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
             cv_mean, cv_std, cv_scores = self.perform_cross_validation(classifier, X, y, cv_folds=5, feedback=feedback)
 
         feedback.setProgress(50)
-        feedback.pushInfo("📊 Calculating classification accuracy...")
+        feedback.pushInfo(ag_tr("📊 Calculating classification accuracy..."))
         
         # Calculate accuracy
         OA = accuracy_score(y_test, y_ts)
         CFM = confusion_matrix(y_test, y_ts)
-        feedback.pushInfo(f"🎯 Classification performance: Overall Accuracy = {OA:.4f} ({OA*100:.2f}%)")
+        feedback.pushInfo(ag_trf('🎯 Classification performance: Overall Accuracy = {0:.4f} ({1:.2f}%)', OA, OA*100))
         
         # Calculate scientific metrics
         try:
             from sklearn.metrics import cohen_kappa_score, balanced_accuracy_score
             kappa = cohen_kappa_score(y_test, y_ts)
             balanced_acc = balanced_accuracy_score(y_test, y_ts)
-            feedback.pushInfo(f"🔬 Cohen's Kappa = {kappa:.4f}")
-            feedback.pushInfo(f"⚖️ Balanced Accuracy = {balanced_acc:.4f}")
+            feedback.pushInfo(ag_trf("🔬 Cohen's Kappa = {0:.4f}", kappa))
+            feedback.pushInfo(ag_trf('⚖️ Balanced Accuracy = {0:.4f}', balanced_acc))
             
             # Kappa interpretation
             if kappa >= 0.8:
@@ -578,35 +577,35 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
                 kappa_interp = "Fair"
             else:
                 kappa_interp = "Poor"
-            feedback.pushInfo(f"📈 Kappa interpretation: {kappa_interp}")
+            feedback.pushInfo(ag_trf('📈 Kappa interpretation: {0}', kappa_interp))
             
         except ImportError:
-            feedback.pushWarning("⚠️ Advanced metrics unavailable - install full scikit-learn")
+            feedback.pushWarning(ag_tr("⚠️ Advanced metrics unavailable - install full scikit-learn"))
 
         # Apply classification to the entire image
         feedback.setProgress(60)
-        feedback.pushInfo("🖼️ Classifying the full image...")
+        feedback.pushInfo(ag_tr("🖼️ Classifying the full image..."))
         
         try:
             classifiedImage = classifier.predict(reshaped_image)
-            feedback.pushInfo(f"✅ Classification complete. Unique classes in result: {np.unique(classifiedImage)}")
+            feedback.pushInfo(ag_trf('✅ Classification complete. Unique classes in result: {0}', np.unique(classifiedImage)))
         except Exception as e:
-            feedback.reportError(f"Error during classification: {str(e)}")
-            raise QgsProcessingException(self.tr(f"Classification failed: {str(e)}. The image may be too large or complex."))
+            feedback.reportError(ag_trf('Error during classification: {0}', str(e)))
+            raise QgsProcessingException(ag_trf('Classification failed: {0}. The image may be too large or complex.', str(e)))
 
         # Format the classified image for saving
         feedback.setProgress(70)
-        feedback.pushInfo("💾 Formatting classified image...")
+        feedback.pushInfo(ag_tr("💾 Formatting classified image..."))
         try:
             classifiedImage_reshaped = classifiedImage.reshape(height, width)
             geotransform = (xmin, pixelSizeX, 0, ymax, 0, -pixelSizeY)
         except Exception as e:
-            feedback.reportError(f"Error reshaping classification result: {str(e)}")
-            raise QgsProcessingException(self.tr(f"Failed to format classification result: {str(e)}"))
+            feedback.reportError(ag_trf('Error reshaping classification result: {0}', str(e)))
+            raise QgsProcessingException(ag_trf('Failed to format classification result: {0}', str(e)))
 
         # Save the classified image
         feedback.setProgress(80)
-        feedback.pushInfo("💾 Saving classified image...")
+        feedback.pushInfo(ag_tr("💾 Saving classified image..."))
         output_file = self.parameterAsOutputLayer(parameters, self.CLASSIFIED_IMAGE, context)
         
         try:
@@ -614,7 +613,7 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
             out_raster = driver.Create(output_file, width, height, 1, gdal.GDT_Float32)
             
             if out_raster is None:
-                raise QgsProcessingException(self.tr(f"Failed to create output raster at {output_file}"))
+                raise QgsProcessingException(ag_trf('Failed to create output raster at {0}', output_file))
                 
             out_raster.SetGeoTransform(geotransform)
             out_raster.SetProjection(crs.toWkt())
@@ -622,7 +621,7 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
             out_band.WriteArray(classifiedImage_reshaped)
             
             # Create raster attribute table for the image
-            feedback.pushInfo("📋 Creating raster attribute table...")
+            feedback.pushInfo(ag_tr("📋 Creating raster attribute table..."))
             rat = gdal.RasterAttributeTable()
             rat.CreateColumn("Value", gdal.GFT_Integer, gdal.GFU_MinMax)
             rat.CreateColumn("Class_name", gdal.GFT_String, gdal.GFU_Name)
@@ -638,8 +637,8 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
             out_raster = None  # Close the file
             
         except Exception as e:
-            feedback.reportError(f"Error saving output raster: {str(e)}")
-            raise QgsProcessingException(self.tr(f"Failed to save output raster: {str(e)}"))
+            feedback.reportError(ag_trf('Error saving output raster: {0}', str(e)))
+            raise QgsProcessingException(ag_trf('Failed to save output raster: {0}', str(e)))
         
         # Generate scientific HTML report if requested
         feedback.setProgress(90)
@@ -647,7 +646,7 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
         if generate_report:
             output_report = self.parameterAsString(parameters, self.OUTPUT_REPORT, context)
             if output_report:
-                feedback.pushInfo(f"📊 Generating comprehensive scientific classification report: {output_report}")
+                feedback.pushInfo(ag_trf('📊 Generating comprehensive scientific classification report: {0}', output_report))
                 try:
                     # Count samples per class for distribution chart
                     unique_classes, class_counts = np.unique(y, return_counts=True)
@@ -663,41 +662,41 @@ class EnhancedClassificationAlgorithm(QgsProcessingAlgorithm):
                     with open(output_report, 'w', encoding='utf-8') as f:
                         f.write(html_content)
                         
-                    feedback.pushInfo("📊 Comprehensive scientific classification report created successfully!")
+                    feedback.pushInfo(ag_tr("📊 Comprehensive scientific classification report created successfully!"))
                     
                     # Try to open the report in default browser
                     try:
                         import webbrowser
                         webbrowser.open('file://' + os.path.abspath(output_report))
-                        feedback.pushInfo("🌐 Report opened in default web browser.")
+                        feedback.pushInfo(ag_tr("🌐 Report opened in default web browser."))
                     except:
-                        feedback.pushInfo("📄 Report saved successfully. You can open it manually in your web browser.")
+                        feedback.pushInfo(ag_tr("📄 Report saved successfully. You can open it manually in your web browser."))
                         
                 except Exception as e:
-                    feedback.pushWarning(f"⚠️ Error generating classification report: {str(e)}")
-                    feedback.pushWarning("✅ Classification completed successfully, but the report could not be generated.")
+                    feedback.pushWarning(ag_trf('⚠️ Error generating classification report: {0}', str(e)))
+                    feedback.pushWarning(ag_tr("✅ Classification completed successfully, but the report could not be generated."))
             else:
-                feedback.pushInfo("📊 Report generation was requested but no output path was specified.")
+                feedback.pushInfo(ag_tr("📊 Report generation was requested but no output path was specified."))
         else:
-            feedback.pushInfo("📊 Scientific classification report generation was not requested.")
+            feedback.pushInfo(ag_tr("📊 Scientific classification report generation was not requested."))
 
         feedback.setProgress(100)
-        feedback.pushInfo("🎯 Enhanced image classification completed successfully! 🎯")
+        feedback.pushInfo(ag_tr("🎯 Enhanced image classification completed successfully! 🎯"))
         
         # Summary of results
         feedback.pushInfo("=" * 50)
-        feedback.pushInfo("📋 CLASSIFICATION SUMMARY:")
-        feedback.pushInfo(f"   🎯 Overall Accuracy: {OA:.4f} ({OA*100:.2f}%)")
+        feedback.pushInfo(ag_tr("📋 CLASSIFICATION SUMMARY:"))
+        feedback.pushInfo(ag_trf('   🎯 Overall Accuracy: {0:.4f} ({1:.2f}%)', OA, OA*100))
         try:
-            feedback.pushInfo(f"   🔬 Cohen's Kappa: {kappa:.4f} ({kappa_interp})")
-            feedback.pushInfo(f"   ⚖️ Balanced Accuracy: {balanced_acc:.4f}")
+            feedback.pushInfo(ag_trf("   🔬 Cohen's Kappa: {0:.4f} ({1})", kappa, kappa_interp))
+            feedback.pushInfo(ag_trf('   ⚖️ Balanced Accuracy: {0:.4f}', balanced_acc))
         except (NameError, TypeError, ValueError) as e:  # nosec B110 - optional metrics, safe to skip
-            feedback.pushInfo(f"   (skipped optional metrics: {e})")
-        feedback.pushInfo(f"   📊 Classes: {len(classes)}")
-        feedback.pushInfo(f"   📈 Training samples: {len(feature_list)}")
-        feedback.pushInfo(f"   🎛️ Spectral bands: {num_bands}")
+            feedback.pushInfo(ag_trf('   (skipped optional metrics: {0})', e))
+        feedback.pushInfo(ag_trf('   📊 Classes: {0}', len(classes)))
+        feedback.pushInfo(ag_trf('   📈 Training samples: {0}', len(feature_list)))
+        feedback.pushInfo(ag_trf('   🎛️ Spectral bands: {0}', num_bands))
         if cv_mean:
-            feedback.pushInfo(f"   🔄 Cross-validation: {cv_mean:.4f} ± {cv_std:.4f}")
+            feedback.pushInfo(ag_trf('   🔄 Cross-validation: {0:.4f} ± {1:.4f}', cv_mean, cv_std))
         feedback.pushInfo("=" * 50)
         
         # Prepare return dictionary

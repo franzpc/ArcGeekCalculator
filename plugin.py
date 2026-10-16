@@ -30,6 +30,7 @@ from .scripts.least_cost_path_finder import LeastCostPathFinder
 from .scripts.tree_planting_pattern_algorithm import TreePlantingPatternAlgorithm
 from .scripts.enhanced_classification_algorithm import EnhancedClassificationAlgorithm
 from .scripts.multiple_basin_delineation import MultipleBasinDelineationAlgorithm
+from .scripts.translation import ag_tr, ag_trf, install_translator, remove_translator
 
 class ArcGeekCalculator:
     def __init__(self, iface: QgisInterface):
@@ -42,6 +43,7 @@ class ArcGeekCalculator:
         self.context_menu_actions = []
         self.map_tool = None
         self.mcp_dialog = None
+        self.translator = install_translator(self.plugin_dir)
 
     def run_basemap_manager(self):
         dialog = BasemapManager(self.iface)
@@ -82,39 +84,39 @@ class ArcGeekCalculator:
             'multiple_basin_delineation': MultipleBasinDelineationAlgorithm()
         }
 
-        self.add_action("Calculate Point Coordinates", self.run_algorithm('coordinate'), os.path.join(self.plugin_dir, "icons/calculate_xy.png"))
-        self.add_action("Calculate Line Geometry", self.run_algorithm('line'), os.path.join(self.plugin_dir, "icons/calculate_length.png"))
-        self.add_action("Calculate Polygon Geometry", self.run_algorithm('polygon'), os.path.join(self.plugin_dir, "icons/calculate_area.png"))
-        self.add_action("Calculate Angles", self.run_algorithm('angles'), os.path.join(self.plugin_dir, "icons/calculate_angles.png"))
-        self.add_action("Extract Ordered Points from Polygons", self.run_algorithm('polygon_to_points'), os.path.join(self.plugin_dir, "icons/order_point.png"))
-        self.add_action("Lines to Ordered Points", self.run_algorithm('lines_to_ordered_points'), os.path.join(self.plugin_dir, "icons/lines_to_points.png"))
-        self.add_action("Azimuth and Distance from Coordinates and Table", self.run_algorithm('calculate_line'), os.path.join(self.plugin_dir, "icons/calculate_line.png"))
-        self.add_action("Export to CSV (Excel compatible)", self.run_algorithm('export_to_csv'), os.path.join(self.plugin_dir, "icons/export_csv.png"))
-        self.add_action("Tree Planting Pattern Generator", self.run_algorithm('tree_planting_pattern'), os.path.join(self.plugin_dir, "icons/tree_planting.png"))
+        self.add_action(ag_tr("Calculate Point Coordinates"), self.run_algorithm('coordinate'), os.path.join(self.plugin_dir, "icons/calculate_xy.png"))
+        self.add_action(ag_tr("Calculate Line Geometry"), self.run_algorithm('line'), os.path.join(self.plugin_dir, "icons/calculate_length.png"))
+        self.add_action(ag_tr("Calculate Polygon Geometry"), self.run_algorithm('polygon'), os.path.join(self.plugin_dir, "icons/calculate_area.png"))
+        self.add_action(ag_tr("Calculate Angles"), self.run_algorithm('angles'), os.path.join(self.plugin_dir, "icons/calculate_angles.png"))
+        self.add_action(ag_tr("Extract Ordered Points from Polygons"), self.run_algorithm('polygon_to_points'), os.path.join(self.plugin_dir, "icons/order_point.png"))
+        self.add_action(ag_tr("Lines to Ordered Points"), self.run_algorithm('lines_to_ordered_points'), os.path.join(self.plugin_dir, "icons/lines_to_points.png"))
+        self.add_action(ag_tr("Azimuth and Distance from Coordinates and Table"), self.run_algorithm('calculate_line'), os.path.join(self.plugin_dir, "icons/calculate_line.png"))
+        self.add_action(ag_tr("Export to CSV (Excel compatible)"), self.run_algorithm('export_to_csv'), os.path.join(self.plugin_dir, "icons/export_csv.png"))
+        self.add_action(ag_tr("Tree Planting Pattern Generator"), self.run_algorithm('tree_planting_pattern'), os.path.join(self.plugin_dir, "icons/tree_planting.png"))
         self.add_separator()
-        self.add_action("Stream Network with Order", self.run_algorithm('watershed_stream'), os.path.join(self.plugin_dir, "icons/watershed_network.png"))
-        self.add_action("Watershed Basin Delineation", self.run_algorithm('watershed_basin'), os.path.join(self.plugin_dir, "icons/watershed_basin.png"))
-        self.add_action("Watershed Morphometric Analysis", self.run_algorithm('basin_analysis'), os.path.join(self.plugin_dir, "icons/watershed_morfo.png"))
-        self.add_action("Multiple Basin Delineation by Points", self.run_algorithm('multiple_basin_delineation'), os.path.join(self.plugin_dir, "icons/watershed_basin.png"))
-        self.add_action("Global Curve Number", self.run_algorithm('global_cn'), os.path.join(self.plugin_dir, "icons/global_cn.png"))
+        self.add_action(ag_tr("Stream Network with Order"), self.run_algorithm('watershed_stream'), os.path.join(self.plugin_dir, "icons/watershed_network.png"))
+        self.add_action(ag_tr("Watershed Basin Delineation"), self.run_algorithm('watershed_basin'), os.path.join(self.plugin_dir, "icons/watershed_basin.png"))
+        self.add_action(ag_tr("Watershed Morphometric Analysis"), self.run_algorithm('basin_analysis'), os.path.join(self.plugin_dir, "icons/watershed_morfo.png"))
+        self.add_action(ag_tr("Multiple Basin Delineation by Points"), self.run_algorithm('multiple_basin_delineation'), os.path.join(self.plugin_dir, "icons/watershed_basin.png"))
+        self.add_action(ag_tr("Global Curve Number"), self.run_algorithm('global_cn'), os.path.join(self.plugin_dir, "icons/global_cn.png"))
         self.add_separator()
-        self.add_action("Land Use Change Detection", self.run_algorithm('land_use_change'), os.path.join(self.plugin_dir, "icons/land_use_change.png"))
-        self.add_action("Weighted Sum", self.run_algorithm('weighted_sum'), os.path.join(self.plugin_dir, "icons/weighted_sum.png"))
-        self.add_action("Least Cost Path Finder", self.run_algorithm('least_cost_path'), os.path.join(self.plugin_dir, "icons/least_cost_path.png"))
-        self.add_action("Dam Flood Simulation", self.run_algorithm('dam_flood_simulation'), os.path.join(self.plugin_dir, "icons/dam_flood.png"))
-        self.add_action("Kriging Analysis", self.run_algorithm('kriging_analysis'), os.path.join(self.plugin_dir, "icons/kriging.png"))
+        self.add_action(ag_tr("Land Use Change Detection"), self.run_algorithm('land_use_change'), os.path.join(self.plugin_dir, "icons/land_use_change.png"))
+        self.add_action(ag_tr("Weighted Sum"), self.run_algorithm('weighted_sum'), os.path.join(self.plugin_dir, "icons/weighted_sum.png"))
+        self.add_action(ag_tr("Least Cost Path Finder"), self.run_algorithm('least_cost_path'), os.path.join(self.plugin_dir, "icons/least_cost_path.png"))
+        self.add_action(ag_tr("Dam Flood Simulation"), self.run_algorithm('dam_flood_simulation'), os.path.join(self.plugin_dir, "icons/dam_flood.png"))
+        self.add_action(ag_tr("Kriging Analysis"), self.run_algorithm('kriging_analysis'), os.path.join(self.plugin_dir, "icons/kriging.png"))
         self.add_separator()
-        self.add_action("Export Contours to 3D CAD", self.run_algorithm('contour_export'), os.path.join(self.plugin_dir, "icons/contour_export3DCAD.png"))
-        self.add_action("Optimized Parcel Division", self.run_algorithm('optimized_parcel_division'), os.path.join(self.plugin_dir, "icons/parcel_division.png"))
+        self.add_action(ag_tr("Export Contours to 3D CAD"), self.run_algorithm('contour_export'), os.path.join(self.plugin_dir, "icons/contour_export3DCAD.png"))
+        self.add_action(ag_tr("Optimized Parcel Division"), self.run_algorithm('optimized_parcel_division'), os.path.join(self.plugin_dir, "icons/parcel_division.png"))
         self.add_separator()
-        self.add_action("Topographic Profile", self.run_algorithm('topographic_profile'), os.path.join(self.plugin_dir, "icons/topo_profile.png"))
-        self.add_action("Manage Basemaps (Google, Bing, Esri)", self.run_basemap_manager, os.path.join(self.plugin_dir, "icons/basemap.png"))
-        self.add_action("Screen Capture", self.run_screen_capture, os.path.join(self.plugin_dir, "icons/screen_capture.png"))
-        self.add_action("Satellite Index Calculator", self.run_algorithm('satellite_index'), os.path.join(self.plugin_dir, "icons/satellite_index.png"))
-        self.add_action("Enhanced Image Classification", self.run_algorithm('enhanced_classification'), os.path.join(self.plugin_dir, "icons/classification.png"))
+        self.add_action(ag_tr("Topographic Profile"), self.run_algorithm('topographic_profile'), os.path.join(self.plugin_dir, "icons/topo_profile.png"))
+        self.add_action(ag_tr("Manage Basemaps (Google, Bing, Esri)"), self.run_basemap_manager, os.path.join(self.plugin_dir, "icons/basemap.png"))
+        self.add_action(ag_tr("Screen Capture"), self.run_screen_capture, os.path.join(self.plugin_dir, "icons/screen_capture.png"))
+        self.add_action(ag_tr("Satellite Index Calculator"), self.run_algorithm('satellite_index'), os.path.join(self.plugin_dir, "icons/satellite_index.png"))
+        self.add_action(ag_tr("Enhanced Image Classification"), self.run_algorithm('enhanced_classification'), os.path.join(self.plugin_dir, "icons/classification.png"))
         self.add_separator()
-        self.add_action("MCP Server", self.toggle_mcp_dialog, os.path.join(self.plugin_dir, "icons/screen_capture.png"))
-        self.add_action("Go to XY", self.run_go_to_xy, os.path.join(self.plugin_dir, "icons/gotoXY.png"))
+        self.add_action(ag_tr("MCP Server"), self.toggle_mcp_dialog, os.path.join(self.plugin_dir, "icons/screen_capture.png"))
+        self.add_action(ag_tr("Go to XY"), self.run_go_to_xy, os.path.join(self.plugin_dir, "icons/gotoXY.png"))
 
         version = Qgis.QGIS_VERSION_INT
 
@@ -168,6 +170,8 @@ class ArcGeekCalculator:
             self.mcp_dialog.raise_()
 
     def unload(self):
+        remove_translator(self.translator)
+        self.translator = None
         for action in self.actions:
             self.iface.removePluginMenu(self.menu, action)
         if self.go_to_xy_dialog:
@@ -208,15 +212,15 @@ class ArcGeekCalculator:
                 geometry_type = layer.geometryType()
 
                 if geometry_type == QgsWkbTypes.GeometryType.PointGeometry:
-                    action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_xy.png")), "Calculate XY Coordinates", menu)
+                    action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_xy.png")), ag_tr("Calculate XY Coordinates"), menu)
                     action.triggered.connect(lambda: self.run_algorithm('coordinate')())
                     self.add_action_to_menu(menu, action)
                 elif geometry_type == QgsWkbTypes.GeometryType.LineGeometry:
-                    action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_length.png")), "Calculate Length", menu)
+                    action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_length.png")), ag_tr("Calculate Length"), menu)
                     action.triggered.connect(lambda: self.run_algorithm('line')())
                     self.add_action_to_menu(menu, action)
                 elif geometry_type == QgsWkbTypes.GeometryType.PolygonGeometry:
-                    action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_area.png")), "Calculate Area and Perimeter", menu)
+                    action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_area.png")), ag_tr("Calculate Area and Perimeter"), menu)
                     action.triggered.connect(lambda: self.run_algorithm('polygon')())
                     self.add_action_to_menu(menu, action)
 
@@ -231,6 +235,6 @@ class ArcGeekCalculator:
         self.context_menu_actions.append(action)
 
     def add_map_menu_items(self, menu):
-        action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/gotoXY.png")), "Go to XY", menu)
+        action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/gotoXY.png")), ag_tr("Go to XY"), menu)
         action.triggered.connect(self.run_go_to_xy)
         menu.addAction(action)

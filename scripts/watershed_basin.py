@@ -13,6 +13,7 @@ from collections import deque
 import math
 import os
 import tempfile
+from .translation import ag_tr, ag_trf
 
 class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
     INPUT_DEM = 'INPUT_DEM'
@@ -97,20 +98,20 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         return None
 
     def calculate_strahler(self, stream_layer, feedback):
-        feedback.pushInfo("Starting Strahler order calculation...")
+        feedback.pushInfo(ag_tr("Starting Strahler order calculation..."))
         if not stream_layer.startEditing():
-            feedback.reportError("Could not start editing stream layer")
+            feedback.reportError(ag_tr("Could not start editing stream layer"))
             return
         field_names = [field.name() for field in stream_layer.fields()]
         if 'sthr_original' not in field_names:
             if not stream_layer.dataProvider().addAttributes([QgsField('sthr_original', QVariant.Int)]):
-                feedback.reportError("Could not add sthr_original field")
+                feedback.reportError(ag_tr("Could not add sthr_original field"))
                 return
             stream_layer.updateFields()
         for feature in stream_layer.getFeatures():
             feature['sthr_original'] = 1
             if not stream_layer.updateFeature(feature):
-                feedback.reportError(f"Could not update feature {feature.id()}")
+                feedback.reportError(ag_trf('Could not update feature {0}', feature.id()))
         processed_features = {}
         def get_strahler_order(feature_id):
             if feature_id in processed_features:
@@ -141,19 +142,19 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             for outlet in outlet_features:
                 get_strahler_order(outlet.id())
         if not stream_layer.commitChanges():
-            feedback.reportError("Could not commit changes to stream layer")
+            feedback.reportError(ag_tr("Could not commit changes to stream layer"))
         else:
-            feedback.pushInfo("Strahler order calculation completed")
+            feedback.pushInfo(ag_tr("Strahler order calculation completed"))
 
     def extend_main_channel(self, stream_layer, feedback):
-        feedback.pushInfo("Starting main channel extension...")
+        feedback.pushInfo(ag_tr("Starting main channel extension..."))
         if not stream_layer.startEditing():
-            feedback.reportError("Could not start editing stream layer for extension")
+            feedback.reportError(ag_tr("Could not start editing stream layer for extension"))
             return
         field_names = [field.name() for field in stream_layer.fields()]
         if 'sthr_extend' not in field_names:
             if not stream_layer.dataProvider().addAttributes([QgsField('sthr_extend', QVariant.Int)]):
-                feedback.reportError("Could not add sthr_extend field")
+                feedback.reportError(ag_tr("Could not add sthr_extend field"))
                 return
             stream_layer.updateFields()
         for feature in stream_layer.getFeatures():
@@ -166,7 +167,7 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                 outlets.append(feature)
         if not outlets:
             if not stream_layer.commitChanges():
-                feedback.reportError("Could not commit changes")
+                feedback.reportError(ag_tr("Could not commit changes"))
             return
         main_outlet = max(outlets, key=lambda feat: feat['sthr_extend'] if feat['sthr_extend'] is not None else 0)
         max_order = main_outlet['sthr_extend']
@@ -194,9 +195,9 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                             feature['sthr_extend'] = current_order
                             stream_layer.updateFeature(feature)
         if not stream_layer.commitChanges():
-            feedback.reportError("Could not commit changes for extend")
+            feedback.reportError(ag_tr("Could not commit changes for extend"))
         else:
-            feedback.pushInfo("Main channel extension completed")
+            feedback.pushInfo(ag_tr("Main channel extension completed"))
 
     def find_complete_branch(self, start_feature, target_order, stream_layer, visited=None):
         if visited is None:
@@ -215,14 +216,14 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         return result
 
     def extend_to_headwaters(self, stream_layer, feedback):
-        feedback.pushInfo("Starting final channel extension to headwaters...")
+        feedback.pushInfo(ag_tr("Starting final channel extension to headwaters..."))
         if not stream_layer.startEditing():
-            feedback.reportError("Could not start editing stream layer for final extension")
+            feedback.reportError(ag_tr("Could not start editing stream layer for final extension"))
             return
         field_names = [field.name() for field in stream_layer.fields()]
         if 'sthr_final' not in field_names:
             if not stream_layer.dataProvider().addAttributes([QgsField('sthr_final', QVariant.Int)]):
-                feedback.reportError("Could not add sthr_final field")
+                feedback.reportError(ag_tr("Could not add sthr_final field"))
                 return
             stream_layer.updateFields()
         for feature in stream_layer.getFeatures():
@@ -234,23 +235,23 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                 outlets.append(feature)
         if not outlets:
             if not stream_layer.commitChanges():
-                feedback.reportError("Could not commit changes")
+                feedback.reportError(ag_tr("Could not commit changes"))
             return
         main_outlet = max(outlets, key=lambda feat: feat['sthr_extend'] if feat['sthr_extend'] is not None else 0)
         max_order = main_outlet['sthr_extend'] if main_outlet['sthr_extend'] is not None else 1
         try:
             main_channel_path = self.find_main_channel_to_headwater(main_outlet, stream_layer)
-            feedback.pushInfo(f"Found main channel path with {len(main_channel_path)} segments")
+            feedback.pushInfo(ag_trf('Found main channel path with {0} segments', len(main_channel_path)))
             for feature in main_channel_path:
                 feature['sthr_final'] = max_order
                 if not stream_layer.updateFeature(feature):
-                    feedback.reportError(f"Could not update feature {feature.id()}")
+                    feedback.reportError(ag_trf('Could not update feature {0}', feature.id()))
         except Exception as e:
-            feedback.reportError(f"Error tracing main channel: {str(e)}")
+            feedback.reportError(ag_trf('Error tracing main channel: {0}', str(e)))
         if not stream_layer.commitChanges():
-            feedback.reportError("Could not commit final changes")
+            feedback.reportError(ag_tr("Could not commit final changes"))
         else:
-            feedback.pushInfo("Final channel extension completed")
+            feedback.pushInfo(ag_tr("Final channel extension completed"))
 
     def find_main_channel_to_headwater(self, start_feature, stream_layer, visited=None):
         if visited is None:
@@ -320,7 +321,7 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             if not self.find_downstream_feature(feature, stream_layer):
                 _, end_point = self.get_points(feature.geometry())
                 if end_point is not None:
-                    feedback.pushInfo(f"Outlet point: {end_point.x():.2f}, {end_point.y():.2f}")
+                    feedback.pushInfo(ag_trf('Outlet point: {0:.2f}, {1:.2f}', end_point.x(), end_point.y()))
                     return QgsPointXY(end_point.x(), end_point.y())
         return None
 
@@ -342,13 +343,13 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             if not upstream_main:
                 start_point, _ = self.get_points(feature.geometry())
                 if start_point is not None:
-                    feedback.pushInfo(f"Headwater point of main channel: {start_point.x():.2f}, {start_point.y():.2f}")
+                    feedback.pushInfo(ag_trf('Headwater point of main channel: {0:.2f}, {1:.2f}', start_point.x(), start_point.y()))
                     return QgsPointXY(start_point.x(), start_point.y()), max_order
         return None, max_order
 
     def find_farthest_point_from_outlet(self, basin_layer, outlet_point, feedback):
         """Find the farthest point on basin boundary from outlet"""
-        feedback.pushInfo("Finding farthest point from outlet...")
+        feedback.pushInfo(ag_tr("Finding farthest point from outlet..."))
         
         basin_feature = next(basin_layer.getFeatures())
         basin_geom = basin_feature.geometry()
@@ -364,29 +365,29 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                 furthest_point = vertex_point
         
         if furthest_point is not None:
-            feedback.pushInfo(f"Farthest point: {furthest_point.x():.2f}, {furthest_point.y():.2f}")
-            feedback.pushInfo(f"Distance from outlet: {max_distance:.2f} m")
+            feedback.pushInfo(ag_trf('Farthest point: {0:.2f}, {1:.2f}', furthest_point.x(), furthest_point.y()))
+            feedback.pushInfo(ag_trf('Distance from outlet: {0:.2f} m', max_distance))
         
         return furthest_point
 
     def calculate_longest_flow_path(self, stream_layer, basin_layer, dem_layer, context, feedback):
         """Calculate the longest flow path using r.drain from farthest point"""
-        feedback.pushInfo("Calculating Longest Flow Path...")
+        feedback.pushInfo(ag_tr("Calculating Longest Flow Path..."))
         
         outlet_point = self.get_outlet_point(stream_layer, feedback)
         if outlet_point is None:
-            feedback.reportError("Could not find outlet point")
+            feedback.reportError(ag_tr("Could not find outlet point"))
             return None
         
         farthest_point = self.find_farthest_point_from_outlet(basin_layer, outlet_point, feedback)
         
         if farthest_point is None:
-            feedback.reportError("Could not find farthest point on basin boundary")
+            feedback.reportError(ag_tr("Could not find farthest point on basin boundary"))
             return None
         
         try:
             drain_coords = f"{farthest_point.x()},{farthest_point.y()}"
-            feedback.pushInfo(f"Running r.drain from: {drain_coords}")
+            feedback.pushInfo(ag_trf('Running r.drain from: {0}', drain_coords))
             
             drain_result = processing.run('grass7:r.drain', {
                 'input': dem_layer,
@@ -400,27 +401,27 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             }, context=context, feedback=feedback)
             
             drain_output = drain_result['drain']
-            feedback.pushInfo(f"r.drain vector output: {drain_output}")
+            feedback.pushInfo(ag_trf('r.drain vector output: {0}', drain_output))
             
             drain_layer = QgsVectorLayer(drain_output, 'drain_path', 'ogr')
             
             if not drain_layer.isValid():
-                feedback.reportError("r.drain output is not valid")
+                feedback.reportError(ag_tr("r.drain output is not valid"))
                 return None
             
-            feedback.pushInfo(f"r.drain produced {drain_layer.featureCount()} feature(s)")
+            feedback.pushInfo(ag_trf('r.drain produced {0} feature(s)', drain_layer.featureCount()))
             
             return drain_layer
             
         except Exception as e:
-            feedback.reportError(f"Error running r.drain: {str(e)}")
+            feedback.reportError(ag_trf('Error running r.drain: {0}', str(e)))
             import traceback
             feedback.reportError(traceback.format_exc())
             return None
 
     def find_intersection_with_stream(self, drain_layer, stream_layer, farthest_point, feedback):
         """Find the FIRST intersection point between drain and stream network"""
-        feedback.pushInfo("Finding first intersection between drain and stream network...")
+        feedback.pushInfo(ag_tr("Finding first intersection between drain and stream network..."))
         
         try:
             drain_feature = next(drain_layer.getFeatures())
@@ -436,10 +437,10 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                 all_drain_points = drain_geom.asPolyline()
             
             if not all_drain_points:
-                feedback.reportError("No points in drain geometry")
+                feedback.reportError(ag_tr("No points in drain geometry"))
                 return None, None
             
-            feedback.pushInfo(f"Drain has {len(all_drain_points)} vertices")
+            feedback.pushInfo(ag_trf('Drain has {0} vertices', len(all_drain_points)))
             
             # Determine which end is the boundary (farthest_point)
             first_pt = all_drain_points[0]
@@ -450,16 +451,16 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             dist_last_to_boundary = math.sqrt((last_pt.x() - farthest_point.x())**2 + 
                                                (last_pt.y() - farthest_point.y())**2)
             
-            feedback.pushInfo(f"Distance first point to boundary: {dist_first_to_boundary:.2f} m")
-            feedback.pushInfo(f"Distance last point to boundary: {dist_last_to_boundary:.2f} m")
+            feedback.pushInfo(ag_trf('Distance first point to boundary: {0:.2f} m', dist_first_to_boundary))
+            feedback.pushInfo(ag_trf('Distance last point to boundary: {0:.2f} m', dist_last_to_boundary))
             
             # Order points from boundary to outlet
             if dist_first_to_boundary < dist_last_to_boundary:
                 ordered_drain_points = all_drain_points
-                feedback.pushInfo("Drain flows from first to last point")
+                feedback.pushInfo(ag_tr("Drain flows from first to last point"))
             else:
                 ordered_drain_points = list(reversed(all_drain_points))
-                feedback.pushInfo("Drain flows from last to first point (reversed)")
+                feedback.pushInfo(ag_tr("Drain flows from last to first point (reversed)"))
             
             # Combine all stream geometries
             stream_geoms = []
@@ -468,7 +469,7 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                     stream_geoms.append(feat.geometry())
             
             if not stream_geoms:
-                feedback.reportError("No valid stream geometries found")
+                feedback.reportError(ag_tr("No valid stream geometries found"))
                 return None, None
             
             combined_stream = QgsGeometry.unaryUnion(stream_geoms)
@@ -503,25 +504,25 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                             intersecting_feature = stream_feat
                             break
                     
-                    feedback.pushInfo(f"Found first intersection at drain vertex {i}")
-                    feedback.pushInfo(f"Intersection point: {first_intersection_point.x():.2f}, {first_intersection_point.y():.2f}")
+                    feedback.pushInfo(ag_trf('Found first intersection at drain vertex {0}', i))
+                    feedback.pushInfo(ag_trf('Intersection point: {0:.2f}, {1:.2f}', first_intersection_point.x(), first_intersection_point.y()))
                     break
             
             if first_intersection_point is None:
-                feedback.reportError(f"No intersection found within {tolerance}m tolerance")
+                feedback.reportError(ag_trf('No intersection found within {0}m tolerance', tolerance))
                 return None, None
             
             return first_intersection_point, intersecting_feature
             
         except Exception as e:
-            feedback.reportError(f"Error finding intersection: {str(e)}")
+            feedback.reportError(ag_trf('Error finding intersection: {0}', str(e)))
             import traceback
             feedback.reportError(traceback.format_exc())
             return None, None
 
     def split_drain_at_intersection(self, drain_layer, intersection_point, farthest_point, feedback):
         """Split the drain line at first intersection and return the upstream segment (boundary to intersection)"""
-        feedback.pushInfo("Splitting drain at first stream intersection...")
+        feedback.pushInfo(ag_tr("Splitting drain at first stream intersection..."))
         
         try:
             drain_feature = next(drain_layer.getFeatures())
@@ -536,7 +537,7 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                 all_points = drain_geom.asPolyline()
             
             if not all_points:
-                feedback.reportError("No points in drain geometry")
+                feedback.reportError(ag_tr("No points in drain geometry"))
                 return None
             
             # Find closest vertex to intersection point
@@ -549,7 +550,7 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                     min_dist = dist
                     split_idx = i
             
-            feedback.pushInfo(f"Splitting at vertex {split_idx}")
+            feedback.pushInfo(ag_trf('Splitting at vertex {0}', split_idx))
             
             # Determine which end is near boundary
             first_pt = all_points[0]
@@ -571,35 +572,35 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                 segment_points_xy.extend([QgsPointXY(p.x(), p.y()) for p in all_points[split_idx + 1:]])
             
             if len(segment_points_xy) < 2:
-                feedback.reportError("Segment has less than 2 points")
+                feedback.reportError(ag_tr("Segment has less than 2 points"))
                 return None
             
             segment_geom = QgsGeometry.fromPolylineXY(segment_points_xy)
             
-            feedback.pushInfo(f"Created drain segment with {len(segment_points_xy)} vertices, length: {segment_geom.length():.2f} m")
+            feedback.pushInfo(ag_trf('Created drain segment with {0} vertices, length: {1:.2f} m', len(segment_points_xy), segment_geom.length()))
             
             return segment_geom
             
         except Exception as e:
-            feedback.reportError(f"Error splitting drain: {str(e)}")
+            feedback.reportError(ag_trf('Error splitting drain: {0}', str(e)))
             import traceback
             feedback.reportError(traceback.format_exc())
             return None
 
     def add_longest_path_to_stream(self, stream_layer, drain_segment, intersecting_feature, intersection_point, outlet_point, max_order, feedback):
         """Topologically merge drain segment with stream network at intersection"""
-        feedback.pushInfo("Topologically merging longest flow path with stream network...")
+        feedback.pushInfo(ag_tr("Topologically merging longest flow path with stream network..."))
         
         if drain_segment is None or drain_segment.isEmpty():
-            feedback.reportError("No valid drain segment geometry")
+            feedback.reportError(ag_tr("No valid drain segment geometry"))
             return False
         
         if intersecting_feature is None:
-            feedback.reportError("No intersecting stream feature")
+            feedback.reportError(ag_tr("No intersecting stream feature"))
             return False
         
         if not stream_layer.startEditing():
-            feedback.reportError("Could not start editing stream layer")
+            feedback.reportError(ag_tr("Could not start editing stream layer"))
             return False
         
         try:
@@ -623,7 +624,7 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                     min_dist = dist
                     split_idx = i
             
-            feedback.pushInfo(f"Splitting stream at index {split_idx}")
+            feedback.pushInfo(ag_trf('Splitting stream at index {0}', split_idx))
             
             # Create two stream segments
             if split_idx == 0:
@@ -654,23 +655,23 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                 dist2_to_outlet = math.sqrt((seg2_free_end.x() - outlet_point.x())**2 + 
                                            (seg2_free_end.y() - outlet_point.y())**2)
                 
-                feedback.pushInfo(f"Segment 1 free end distance to outlet: {dist1_to_outlet:.2f} m")
-                feedback.pushInfo(f"Segment 2 free end distance to outlet: {dist2_to_outlet:.2f} m")
+                feedback.pushInfo(ag_trf('Segment 1 free end distance to outlet: {0:.2f} m', dist1_to_outlet))
+                feedback.pushInfo(ag_trf('Segment 2 free end distance to outlet: {0:.2f} m', dist2_to_outlet))
                 
                 # Keep the segment whose free end is closer to outlet (flows toward outlet)
                 if dist1_to_outlet < dist2_to_outlet:
                     stream_seg_to_keep = stream_seg1
-                    feedback.pushInfo("Keeping segment 1 (closer to outlet)")
+                    feedback.pushInfo(ag_tr("Keeping segment 1 (closer to outlet)"))
                 else:
                     stream_seg_to_keep = stream_seg2
-                    feedback.pushInfo("Keeping segment 2 (closer to outlet)")
+                    feedback.pushInfo(ag_tr("Keeping segment 2 (closer to outlet)"))
             elif stream_seg1:
                 stream_seg_to_keep = stream_seg1
             elif stream_seg2:
                 stream_seg_to_keep = stream_seg2
             
             if not stream_seg_to_keep:
-                feedback.reportError("No valid stream segment to keep")
+                feedback.reportError(ag_tr("No valid stream segment to keep"))
                 stream_layer.rollBack()
                 return False
             
@@ -712,21 +713,21 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             elif drain_start_at_int and stream_end_at_int:
                 merged_points = stream_points_xy[:-1] + [intersection_point] + drain_points_xy[1:]
             else:
-                feedback.pushInfo("Using default merge order")
+                feedback.pushInfo(ag_tr("Using default merge order"))
                 merged_points = drain_points_xy + stream_points_xy
             
             if len(merged_points) < 2:
-                feedback.reportError("Merged geometry has less than 2 points")
+                feedback.reportError(ag_tr("Merged geometry has less than 2 points"))
                 stream_layer.rollBack()
                 return False
             
             merged_geom = QgsGeometry.fromPolylineXY(merged_points)
             
-            feedback.pushInfo(f"Created merged geometry: {len(merged_points)} vertices, length: {merged_geom.length():.2f} m")
+            feedback.pushInfo(ag_trf('Created merged geometry: {0} vertices, length: {1:.2f} m', len(merged_points), merged_geom.length()))
             
             # Delete original stream feature
             if not stream_layer.deleteFeature(intersecting_feature.id()):
-                feedback.reportError(f"Could not delete stream feature {intersecting_feature.id()}")
+                feedback.reportError(ag_trf('Could not delete stream feature {0}', intersecting_feature.id()))
                 stream_layer.rollBack()
                 return False
             
@@ -743,19 +744,19 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                     new_feature[field_name] = intersecting_feature[field_name]
             
             if not stream_layer.addFeature(new_feature):
-                feedback.reportError("Could not add merged feature")
+                feedback.reportError(ag_tr("Could not add merged feature"))
                 stream_layer.rollBack()
                 return False
             
             if not stream_layer.commitChanges():
-                feedback.reportError("Could not commit changes")
+                feedback.reportError(ag_tr("Could not commit changes"))
                 return False
             
-            feedback.pushInfo("Topological merge completed successfully")
+            feedback.pushInfo(ag_tr("Topological merge completed successfully"))
             return True
             
         except Exception as e:
-            feedback.reportError(f"Error during merge: {str(e)}")
+            feedback.reportError(ag_trf('Error during merge: {0}', str(e)))
             import traceback
             feedback.reportError(traceback.format_exc())
             stream_layer.rollBack()
@@ -769,22 +770,22 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         super().onClose()
 
     def initAlgorithm(self, config=None):
-        self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_DEM, 'Input DEM'))
-        self.addParameter(QgsProcessingParameterPoint(self.POUR_POINT, 'Pour Point (click on the river)'))
-        self.addParameter(QgsProcessingParameterVectorLayer(self.INPUT_STREAM, 'Input Stream Network', 
+        self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_DEM, ag_tr('Input DEM')))
+        self.addParameter(QgsProcessingParameterPoint(self.POUR_POINT, ag_tr('Pour Point (click on the river)')))
+        self.addParameter(QgsProcessingParameterVectorLayer(self.INPUT_STREAM, ag_tr('Input Stream Network'), 
                                                            types=[QgsProcessing.SourceType.TypeVectorLine], optional=False))
-        self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_ITERATIONS, 'Smoothing Iterations', 
+        self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_ITERATIONS, ag_tr('Smoothing Iterations'), 
                                                        type=QgsProcessingParameterNumber.Type.Integer, 
                                                        minValue=0, maxValue=10, defaultValue=1))
-        self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_OFFSET, 'Smoothing Offset', 
+        self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_OFFSET, ag_tr('Smoothing Offset'), 
                                                        type=QgsProcessingParameterNumber.Type.Double, 
                                                        minValue=0.0, maxValue=0.5, defaultValue=0.25))
         self.addParameter(QgsProcessingParameterBoolean(self.CALC_LONGEST_PATH, 
-                                                        'Calculate Longest Flow Path', 
+                                                        ag_tr('Calculate Longest Flow Path'), 
                                                         defaultValue=False))
-        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_BASIN, 'Watershed Basin', 
+        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_BASIN, ag_tr('Watershed Basin'), 
                                                             QgsProcessing.SourceType.TypeVectorPolygon))
-        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_STREAM, 'Basin Stream Network', 
+        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_STREAM, ag_tr('Basin Stream Network'), 
                                                             QgsProcessing.SourceType.TypeVectorLine))
 
     def processAlgorithm(self, parameters, context, feedback):
@@ -811,7 +812,7 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             raster_size = resampled_dem.width() * resampled_dem.height()
             if raster_size <= self.MAX_RASTER_SIZE:
                 if attempt > 0:
-                    feedback.pushInfo(self.tr(f'DEM resampled to {current_cell_size:.2f} units per pixel for processing.'))
+                    feedback.pushInfo(ag_trf('DEM resampled to {0:.2f} units per pixel for processing.', current_cell_size))
                 break
             cell_size_multiplier *= 3
         
@@ -940,16 +941,16 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                                                                        intersecting_feature, intersection_point,
                                                                        outlet_point, max_order, feedback):
                                         # Recalculate Strahler orders
-                                        feedback.pushInfo("Recalculating Strahler orders after merge...")
+                                        feedback.pushInfo(ag_tr("Recalculating Strahler orders after merge..."))
                                         self.calculate_strahler(clipped_stream, feedback)
                                         self.extend_main_channel(clipped_stream, feedback)
                                         self.extend_to_headwaters(clipped_stream, feedback)
                                     else:
-                                        feedback.pushInfo("Merge failed, continuing with original network")
+                                        feedback.pushInfo(ag_tr("Merge failed, continuing with original network"))
                             else:
-                                feedback.pushInfo("No intersection found, skipping longest flow path")
+                                feedback.pushInfo(ag_tr("No intersection found, skipping longest flow path"))
                 else:
-                    feedback.pushInfo("No outlet point found, skipping longest flow path")
+                    feedback.pushInfo(ag_tr("No outlet point found, skipping longest flow path"))
 
             (stream_sink, stream_dest_id) = self.parameterAsSink(parameters, self.OUTPUT_STREAM, context,
                                                                  clipped_stream.fields(), QgsWkbTypes.Type.LineString, 
@@ -964,10 +965,10 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
 
             results[self.OUTPUT_STREAM] = stream_dest_id
         except Exception as e:
-            feedback.reportError(f"Error processing stream network: {str(e)}")
+            feedback.reportError(ag_trf('Error processing stream network: {0}', str(e)))
             import traceback
             feedback.reportError(traceback.format_exc())
-            raise QgsProcessingException(f"Error processing stream network: {str(e)}")
+            raise QgsProcessingException(ag_trf('Error processing stream network: {0}', str(e)))
 
         return results
 
@@ -1020,4 +1021,4 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         """)
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)

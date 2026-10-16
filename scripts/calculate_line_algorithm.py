@@ -7,6 +7,7 @@ from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterNumber,
                        QgsProcessing, QgsProcessingException, QgsProcessingParameterEnum)
 from qgis.PyQt.QtCore import QVariant
 import math
+from .translation import ag_tr, ag_trf
 
 class CalculateLineAlgorithm(QgsProcessingAlgorithm):
     INPUT_X = 'INPUT_X'
@@ -21,16 +22,16 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
     OUTPUT_POINTS = 'OUTPUT_POINTS'
 
     def initAlgorithm(self, config=None):
-        self.addParameter(QgsProcessingParameterNumber(self.INPUT_X, 'Starting X coordinate', QgsProcessingParameterNumber.Type.Double))
-        self.addParameter(QgsProcessingParameterNumber(self.INPUT_Y, 'Starting Y coordinate', QgsProcessingParameterNumber.Type.Double))
-        self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT_TABLE, 'Input table', [QgsProcessing.SourceType.TypeVector, QgsProcessing.SourceType.TypeFile], optional=False))
-        self.addParameter(QgsProcessingParameterField(self.FIELD_DISTANCE, 'Distance field', parentLayerParameterName=self.INPUT_TABLE, type=QgsProcessingParameterField.DataType.Any, optional=False))
-        self.addParameter(QgsProcessingParameterField(self.FIELD_ANGLE, 'Angle field', parentLayerParameterName=self.INPUT_TABLE, type=QgsProcessingParameterField.DataType.Any, optional=False))
-        self.addParameter(QgsProcessingParameterEnum(self.ANGLE_TYPE, 'Angle type in input data', options=['Azimuth', 'Polar'], defaultValue=0))
-        self.addParameter(QgsProcessingParameterField(self.FIELD_OBSERVATIONS, 'Observations field', parentLayerParameterName=self.INPUT_TABLE, type=QgsProcessingParameterField.DataType.Any, optional=True))
-        self.addParameter(QgsProcessingParameterCrs(self.OUTPUT_CRS, 'Output CRS', optional=False))
-        self.addParameter(QgsProcessingParameterVectorDestination(self.OUTPUT_LINE, 'Output line layer'))
-        self.addParameter(QgsProcessingParameterVectorDestination(self.OUTPUT_POINTS, 'Output points layer'))
+        self.addParameter(QgsProcessingParameterNumber(self.INPUT_X, ag_tr('Starting X coordinate'), QgsProcessingParameterNumber.Type.Double))
+        self.addParameter(QgsProcessingParameterNumber(self.INPUT_Y, ag_tr('Starting Y coordinate'), QgsProcessingParameterNumber.Type.Double))
+        self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT_TABLE, ag_tr('Input table'), [QgsProcessing.SourceType.TypeVector, QgsProcessing.SourceType.TypeFile], optional=False))
+        self.addParameter(QgsProcessingParameterField(self.FIELD_DISTANCE, ag_tr('Distance field'), parentLayerParameterName=self.INPUT_TABLE, type=QgsProcessingParameterField.DataType.Any, optional=False))
+        self.addParameter(QgsProcessingParameterField(self.FIELD_ANGLE, ag_tr('Angle field'), parentLayerParameterName=self.INPUT_TABLE, type=QgsProcessingParameterField.DataType.Any, optional=False))
+        self.addParameter(QgsProcessingParameterEnum(self.ANGLE_TYPE, ag_tr('Angle type in input data'), options=[ag_tr('Azimuth'), ag_tr('Polar')], defaultValue=0))
+        self.addParameter(QgsProcessingParameterField(self.FIELD_OBSERVATIONS, ag_tr('Observations field'), parentLayerParameterName=self.INPUT_TABLE, type=QgsProcessingParameterField.DataType.Any, optional=True))
+        self.addParameter(QgsProcessingParameterCrs(self.OUTPUT_CRS, ag_tr('Output CRS'), optional=False))
+        self.addParameter(QgsProcessingParameterVectorDestination(self.OUTPUT_LINE, ag_tr('Output line layer')))
+        self.addParameter(QgsProcessingParameterVectorDestination(self.OUTPUT_POINTS, ag_tr('Output points layer')))
 
     def processAlgorithm(self, parameters, context, feedback):
         multi_feedback = QgsProcessingMultiStepFeedback(2, feedback)
@@ -132,7 +133,7 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
                 x_previous, y_previous = x_current, y_current
                 
             except (ValueError, TypeError) as e:
-                feedback.reportError(f"Error in row {current + 1}: {str(e)}")
+                feedback.reportError(ag_trf('Error in row {0}: {1}', current + 1, str(e)))
                 continue
 
             feedback.setProgress(int(current * total))
@@ -143,7 +144,7 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
         return 'calculatelinefromcoordinatesandtable'
 
     def displayName(self):
-        return 'Azimuth and distance from Coordinates and Table'
+        return ag_tr('Azimuth and distance from Coordinates and Table')
 
     def group(self):
         return 'ArcGeek Calculator'
@@ -152,7 +153,7 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
         return 'arcgeek_calculator'
 
     def shortHelpString(self):
-        return """
+        return ag_tr("""
         This algorithm calculates a line and points from starting coordinates and a table of distances and angles.
 
         Parameters:
@@ -180,7 +181,7 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
         - Create point locations from relative positioning data.
 
         Note: Ensure that you select the correct angle type that matches your input data, and that you select the appropriate CRS for your data to avoid potential inaccuracies in the results.
-        """
+        """)
 
     def createInstance(self):
         return CalculateLineAlgorithm()

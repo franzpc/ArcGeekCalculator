@@ -13,6 +13,7 @@ from tempfile import gettempdir
 import math
 import processing
 import tempfile
+from .translation import ag_tr, ag_trf
 
 # ===== LAZY LOADING SYSTEM =====
 # Libraries will be imported only when the tool is executed
@@ -129,7 +130,7 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
 
     def tr(self, string):
         """Translation function for the algorithm."""
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)
 
     def checkDependencies(self):
         """Check if all required dependencies are installed."""
@@ -357,11 +358,11 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
         
         if min_value_param is not None and min_value_param != '':
             min_value = self.parameterAsDouble(parameters, self.MIN_VALUE, context)
-            feedback.pushInfo(self.tr(f'Minimum value limit will be applied: {min_value}'))
+            feedback.pushInfo(ag_trf('Minimum value limit will be applied: {0}', min_value))
         
         if max_value_param is not None and max_value_param != '':
             max_value = self.parameterAsDouble(parameters, self.MAX_VALUE, context)
-            feedback.pushInfo(self.tr(f'Maximum value limit will be applied: {max_value}'))
+            feedback.pushInfo(ag_trf('Maximum value limit will be applied: {0}', max_value))
         
         output_raster = self.parameterAsOutputLayer(parameters, self.OUTPUT_RASTER, context)
         
@@ -369,7 +370,7 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
         output_error = None
         if include_error:
             output_error = self.parameterAsOutputLayer(parameters, self.OUTPUT_ERROR, context)
-            feedback.pushInfo(self.tr(f'Error estimation will be saved to: {output_error}'))
+            feedback.pushInfo(ag_trf('Error estimation will be saved to: {0}', output_error))
 
         # Create temporary paths for ASCII Grid output
         temp_dir = tempfile.mkdtemp(prefix='kriging_')
@@ -389,7 +390,7 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
 
         # Get CRS from source
         crs = source.sourceCrs()
-        feedback.pushInfo(self.tr(f'Using CRS: {crs.authid()}'))
+        feedback.pushInfo(ag_trf('Using CRS: {0}', crs.authid()))
         
         # Use input layer extent if not specified
         if extent.isNull():
@@ -423,20 +424,12 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
                 (extent.width() * extent.height()) / MAX_GRID_CELLS
             )
             raise QgsProcessingException(
-                self.tr(
-                    f'The output grid is too large ({grid_width} x {grid_height} = {total_cells:,} cells). '
-                    f'This would require several gigabytes of RAM and will crash QGIS.\n\n'
-                    f'Please increase the cell size. '
-                    f'For your current extent, the minimum recommended cell size is '
-                    f'{min_safe_cell_size:.1f} (in the same units as your CRS).\n\n'
-                    f'Tip: For projected CRS (meters), use values like 500, 1000 or larger '
-                    f'depending on your study area size.'
-                )
+                ag_trf('The output grid is too large ({0} x {1} = {2:,} cells). This would require several gigabytes of RAM and will crash QGIS.\n\nPlease increase the cell size. For your current extent, the minimum recommended cell size is {3:.1f} (in the same units as your CRS).\n\nTip: For projected CRS (meters), use values like 500, 1000 or larger depending on your study area size.', grid_width, grid_height, total_cells, min_safe_cell_size)
             )
         # --- END GRID SIZE SAFETY CHECK ---
 
-        feedback.pushInfo(self.tr(f'Output grid: {grid_width} x {grid_height} cells, cell size: {cell_size}'))
-        feedback.pushInfo(self.tr(f'Extent: ({extent.xMinimum()}, {extent.yMinimum()}) - ({extent.xMaximum()}, {extent.yMaximum()})'))
+        feedback.pushInfo(ag_trf('Output grid: {0} x {1} cells, cell size: {2}', grid_width, grid_height, cell_size))
+        feedback.pushInfo(ag_trf('Extent: ({0}, {1}) - ({2}, {3})', extent.xMinimum(), extent.yMinimum(), extent.xMaximum(), extent.yMaximum()))
         
         # Extract data from source
         x_coords = []
@@ -466,14 +459,14 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
         if len(values) < 3:
             raise QgsProcessingException(self.tr('Not enough valid points for kriging interpolation (minimum 3 required).'))
         
-        feedback.pushInfo(self.tr(f'Using {len(values)} points for interpolation'))
-        feedback.pushInfo(self.tr(f'Value range: {min(values)} to {max(values)}'))
+        feedback.pushInfo(ag_trf('Using {0} points for interpolation', len(values)))
+        feedback.pushInfo(ag_trf('Value range: {0} to {1}', min(values), max(values)))
         
         # Suppress warnings from PyKrige
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             
-            feedback.pushInfo(self.tr(f'Starting kriging with {variogram_model} variogram model...'))
+            feedback.pushInfo(ag_trf('Starting kriging with {0} variogram model...', variogram_model))
             
             # Create grid using linspace for more precise control
             x_min = extent.xMinimum()
@@ -487,7 +480,7 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
             
             # Perform kriging based on type
             if is_universal:
-                feedback.pushInfo(self.tr(f'Using Universal Kriging with drift type: {drift_type}'))
+                feedback.pushInfo(ag_trf('Using Universal Kriging with drift type: {0}', drift_type))
                 
                 # Convert drift_type to the format expected by UniversalKriging
                 if drift_type == 'none':
@@ -533,12 +526,12 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
             if apply_limits:
                 if min_value is not None and max_value is not None:
                     # Apply both min and max limits
-                    feedback.pushInfo(f"Applying limits: min={min_value}, max={max_value}")
+                    feedback.pushInfo(ag_trf('Applying limits: min={0}, max={1}', min_value, max_value))
                     # Count values to see what's happening
                     below_min = np.sum(z < min_value)
                     above_max = np.sum(z > max_value)
-                    feedback.pushInfo(f"Values below min: {below_min}")
-                    feedback.pushInfo(f"Values above max: {above_max}")
+                    feedback.pushInfo(ag_trf('Values below min: {0}', below_min))
+                    feedback.pushInfo(ag_trf('Values above max: {0}', above_max))
                     
                     # Now apply the limits
                     z = np.clip(z, min_value, max_value)
@@ -546,36 +539,36 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
                     # Verify the limits were applied
                     new_below_min = np.sum(z < min_value)
                     new_above_max = np.sum(z > max_value)
-                    feedback.pushInfo(f"After clipping - Values below min: {new_below_min}")
-                    feedback.pushInfo(f"After clipping - Values above max: {new_above_max}")
+                    feedback.pushInfo(ag_trf('After clipping - Values below min: {0}', new_below_min))
+                    feedback.pushInfo(ag_trf('After clipping - Values above max: {0}', new_above_max))
                     
                 elif min_value is not None:
                     # Apply just min limit
-                    feedback.pushInfo(f"Applying minimum limit: {min_value}")
+                    feedback.pushInfo(ag_trf('Applying minimum limit: {0}', min_value))
                     # Count values to see what's happening
                     below_min = np.sum(z < min_value)
-                    feedback.pushInfo(f"Values below min: {below_min}")
+                    feedback.pushInfo(ag_trf('Values below min: {0}', below_min))
                     
                     # Now apply the limit
                     z = np.maximum(z, min_value)
                     
                     # Verify the limit was applied
                     new_below_min = np.sum(z < min_value)
-                    feedback.pushInfo(f"After applying minimum - Values below min: {new_below_min}")
+                    feedback.pushInfo(ag_trf('After applying minimum - Values below min: {0}', new_below_min))
                     
                 elif max_value is not None:
                     # Apply just max limit
-                    feedback.pushInfo(f"Applying maximum limit: {max_value}")
+                    feedback.pushInfo(ag_trf('Applying maximum limit: {0}', max_value))
                     # Count values to see what's happening
                     above_max = np.sum(z > max_value)
-                    feedback.pushInfo(f"Values above max: {above_max}")
+                    feedback.pushInfo(ag_trf('Values above max: {0}', above_max))
                     
                     # Now apply the limit
                     z = np.minimum(z, max_value)
                     
                     # Verify the limit was applied
                     new_above_max = np.sum(z > max_value)
-                    feedback.pushInfo(f"After applying maximum - Values above max: {new_above_max}")
+                    feedback.pushInfo(ag_trf('After applying maximum - Values above max: {0}', new_above_max))
             
             # Handle NaN values
             z = np.nan_to_num(z, nan=-9999)
@@ -600,9 +593,9 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
                     outputType=_gdal.GDT_Float32
                 )
                 _gdal.Translate(output_raster, temp_output_asc, options=_translate_opts)
-                feedback.pushInfo(f"Main raster output saved to: {output_raster}")
+                feedback.pushInfo(ag_trf('Main raster output saved to: {0}', output_raster))
             except Exception as e:
-                feedback.reportError(f"Error converting main raster: {str(e)}")
+                feedback.reportError(ag_trf('Error converting main raster: {0}', str(e)))
                 # Fallback: copy ASC file preserving .prj
                 if not output_raster.lower().endswith('.asc'):
                     output_raster = os.path.splitext(output_raster)[0] + '.asc'
@@ -631,9 +624,9 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
                         outputType=_gdal.GDT_Float32
                     )
                     _gdal.Translate(output_error, temp_error_asc, options=_err_opts)
-                    feedback.pushInfo(f"Error raster output saved to: {output_error}")
+                    feedback.pushInfo(ag_trf('Error raster output saved to: {0}', output_error))
                 except Exception as e:
-                    feedback.reportError(f"Error converting variance raster: {str(e)}")
+                    feedback.reportError(ag_trf('Error converting variance raster: {0}', str(e)))
                     if not output_error.lower().endswith('.asc'):
                         output_error = os.path.splitext(output_error)[0] + '.asc'
                     with open(temp_error_asc, 'r') as src_file, open(output_error, 'w') as dst_file:
@@ -651,11 +644,11 @@ class KrigingAnalysisAlgorithm(QgsProcessingAlgorithm):
             # Now try to remove the entire temp directory
             try:
                 shutil.rmtree(temp_dir)
-                feedback.pushInfo(f"Successfully cleaned up temporary directory: {temp_dir}")
+                feedback.pushInfo(ag_trf('Successfully cleaned up temporary directory: {0}', temp_dir))
             except Exception as e:
-                feedback.pushInfo(f"Warning: Could not clean up temporary directory: {str(e)}")
+                feedback.pushInfo(ag_trf('Warning: Could not clean up temporary directory: {0}', str(e)))
         except Exception as e:
-            feedback.pushInfo(f"Warning: Error during cleanup: {str(e)}")
+            feedback.pushInfo(ag_trf('Warning: Error during cleanup: {0}', str(e)))
         
         feedback.setProgress(100)
         

@@ -3,6 +3,7 @@ from qgis.core import (QgsProcessing, QgsProcessingAlgorithm, QgsProcessingParam
                        QgsProcessingParameterString, QgsProcessingParameterRasterDestination, 
                        QgsProcessingException, QgsRasterLayer)
 from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
+from .translation import ag_tr, ag_trf
 
 class WeightedSumTool(QgsProcessingAlgorithm):
     INPUT_RASTERS = 'INPUT_RASTERS'
@@ -106,7 +107,7 @@ class WeightedSumTool(QgsProcessingAlgorithm):
         result = calc.processCalculation(feedback)
 
         if result != 0:
-            raise QgsProcessingException(self.tr(f'Error calculating output raster: {result}'))
+            raise QgsProcessingException(ag_trf('Error calculating output raster: {0}', result))
 
         return {self.OUTPUT_WEIGHTED_SUM: output}  # Changed from OUTPUT to OUTPUT_WEIGHTED_SUM
 
@@ -134,7 +135,7 @@ class WeightedSumTool(QgsProcessingAlgorithm):
                        "The tool will automatically calculate the weighted sum based on your inputs.")
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)
 
     def createInstance(self):
         return WeightedSumTool()

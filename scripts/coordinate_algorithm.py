@@ -8,6 +8,7 @@ from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterFeatureSour
 from qgis.PyQt.QtCore import QVariant, QCoreApplication
 import traceback
 import os
+from .translation import ag_tr, ag_trf
 
 class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
     INPUT = 'INPUT'
@@ -24,7 +25,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
         super().__init__()
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)
 
     def createInstance(self):
         return CoordinateCalculatorAlgorithm()
@@ -154,8 +155,8 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
             if not crs.isValid():
                 crs = source.sourceCrs()
 
-            feedback.pushInfo(f"Input CRS: {crs.authid()}")
-            feedback.pushInfo(f"Input layer feature count: {source.featureCount()}")
+            feedback.pushInfo(ag_trf('Input CRS: {0}', crs.authid()))
+            feedback.pushInfo(ag_trf('Input layer feature count: {0}', source.featureCount()))
 
             # Prepare fields
             field_definitions = {
@@ -179,7 +180,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
             if format_dms2:
                 fields_to_add.extend(['Lat_DMS', 'Lon_DMS'])
 
-            feedback.pushInfo(f"Fields to be added or updated: {', '.join(fields_to_add)}")
+            feedback.pushInfo(ag_trf('Fields to be added or updated: {0}', ', '.join(fields_to_add)))
 
             # Prepare transformations
             transform_to_crs = QgsCoordinateTransform(source.sourceCrs(), crs, QgsProject.instance())
@@ -266,7 +267,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
                     feedback.setProgress(int(end / total_features * 100))
                 
                 layer.commitChanges()
-                feedback.pushInfo(f"Modified input layer: {layer.id()}")
+                feedback.pushInfo(ag_trf('Modified input layer: {0}', layer.id()))
                 return {self.OUTPUT: layer.id()}
             else:
                 # Creating a new layer
@@ -323,11 +324,11 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
                     sink.addFeature(new_feature, QgsFeatureSink.Flag.FastInsert)
                     feedback.setProgress(int((current + 1) / total_features * 100))
                 
-                feedback.pushInfo(f"Created new layer: {dest_id}")
+                feedback.pushInfo(ag_trf('Created new layer: {0}', dest_id))
                 return {self.OUTPUT: dest_id}
 
         except Exception as e:
-            feedback.reportError(self.tr(f"Error in processAlgorithm: {str(e)}"), fatalError=True)
+            feedback.reportError(ag_trf('Error in processAlgorithm: {0}', str(e)), fatalError=True)
             feedback.pushInfo(traceback.format_exc())
             raise
 

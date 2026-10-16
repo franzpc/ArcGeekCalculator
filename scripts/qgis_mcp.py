@@ -25,6 +25,7 @@ from qgis.PyQt.QtWidgets import (
 from .qgis_mcp_server.constants import DEFAULT_PORT, UPSTREAM_VERSION
 from .qgis_mcp_server.registry import COMMANDS
 from .qgis_mcp_server.server import QgisMCPServer
+from .translation import ag_tr, ag_trf
 
 # Pinned to the tag the vendored plugin side was copied from: uvx would
 # otherwise fetch upstream's latest server, which can call commands or pass
@@ -42,7 +43,7 @@ class QgisMCPDialog(QDialog):
 
     def __init__(self, iface):
         super().__init__(iface.mainWindow())
-        self.setWindowTitle("ArcGeek MCP Server")
+        self.setWindowTitle(ag_tr("ArcGeek MCP Server"))
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.Tool)
         self.iface = iface
         self.server = None
@@ -55,34 +56,32 @@ class QgisMCPDialog(QDialog):
         layout = QVBoxLayout(self)
 
         info = QLabel(
-            "<b>QGIS MCP Server</b><br>"
-            f"<small>Powered by <i>nkarasiak/qgis-mcp</i> {UPSTREAM_VERSION} "
-            f"&mdash; {len(COMMANDS)} commands</small>"
+            ag_trf('<b>QGIS MCP Server</b><br><small>Powered by <i>nkarasiak/qgis-mcp</i> {0} &mdash; {1} commands</small>', UPSTREAM_VERSION, len(COMMANDS))
         )
         info.setAlignment(align_center)
         layout.addWidget(info)
 
-        layout.addWidget(QLabel("Server Port:"))
+        layout.addWidget(QLabel(ag_tr("Server Port:")))
         self.port_spin = QSpinBox()
         self.port_spin.setRange(1024, 65535)
         self.port_spin.setValue(DEFAULT_PORT)
         layout.addWidget(self.port_spin)
 
-        self.start_button = QPushButton("Start Server")
+        self.start_button = QPushButton(ag_tr("Start Server"))
         self.start_button.clicked.connect(self.start_server)
         layout.addWidget(self.start_button)
 
-        self.stop_button = QPushButton("Stop Server")
+        self.stop_button = QPushButton(ag_tr("Stop Server"))
         self.stop_button.clicked.connect(self.stop_server)
         self.stop_button.setEnabled(False)
         layout.addWidget(self.stop_button)
 
-        self.status_label = QLabel("Server: Stopped")
+        self.status_label = QLabel(ag_tr("Server: Stopped"))
         self.status_label.setAlignment(align_center)
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
 
-        cfg_btn = QPushButton("How to connect (Claude / Antigravity / Cursor / OpenCode)")
+        cfg_btn = QPushButton(ag_tr("How to connect (Claude / Antigravity / Cursor / OpenCode)"))
         cfg_btn.clicked.connect(self._show_config_dialog)
         layout.addWidget(cfg_btn)
 
@@ -110,23 +109,23 @@ class QgisMCPDialog(QDialog):
         }, indent=2)
 
         dlg = QDialog(self)
-        dlg.setWindowTitle("Connect Claude / Antigravity / Cursor / OpenCode -- MCP Setup")
+        dlg.setWindowTitle(ag_tr("Connect Claude / Antigravity / Cursor / OpenCode -- MCP Setup"))
         dlg.setMinimumWidth(560)
         dlg_layout = QVBoxLayout(dlg)
 
         header = QLabel(
-            "<b>Works with:</b> Claude Code, Claude Desktop, Antigravity, Cursor, OpenCode, "
-            "and any MCP-compatible client."
+            ag_tr("<b>Works with:</b> Claude Code, Claude Desktop, Antigravity, Cursor, OpenCode, "
+            "and any MCP-compatible client.")
         )
         header.setWordWrap(True)
         dlg_layout.addWidget(header)
 
-        dlg_layout.addWidget(QLabel(f"<br><b>Step 1 &mdash; Install uv on {os_name}:</b>"))
+        dlg_layout.addWidget(QLabel(ag_trf('<br><b>Step 1 &mdash; Install uv on {0}:</b>', os_name)))
         uv_row = QHBoxLayout()
         uv_edit = QLineEdit(uv_install)
         uv_edit.setReadOnly(True)
         uv_edit.setFont(QFont("Courier New", 8))
-        copy_uv_btn = QPushButton("Copy")
+        copy_uv_btn = QPushButton(ag_tr("Copy"))
         copy_uv_btn.setFixedWidth(55)
         copy_uv_btn.clicked.connect(lambda: QApplication.clipboard().setText(uv_install))
         uv_row.addWidget(uv_edit)
@@ -134,8 +133,7 @@ class QgisMCPDialog(QDialog):
         dlg_layout.addLayout(uv_row)
 
         dlg_layout.addWidget(QLabel(
-            f"<br><b>Step 2 &mdash; Add this to your MCP config file:</b>"
-            f"<br><code>{cfg_path}</code>"
+            ag_trf('<br><b>Step 2 &mdash; Add this to your MCP config file:</b><br><code>{0}</code>', cfg_path)
         ))
         code_edit = QTextEdit()
         code_edit.setReadOnly(True)
@@ -145,16 +143,16 @@ class QgisMCPDialog(QDialog):
         dlg_layout.addWidget(code_edit)
 
         note = QLabel(
-            "<small>Already configured with an older ArcGeek version? Replace the "
-            "<code>--from</code> value with the one above and restart your AI client.</small>"
+            ag_tr("<small>Already configured with an older ArcGeek version? Replace the "
+            "<code>--from</code> value with the one above and restart your AI client.</small>")
         )
         note.setWordWrap(True)
         dlg_layout.addWidget(note)
 
         btn_row = QHBoxLayout()
-        copy_btn = QPushButton("Copy JSON config")
+        copy_btn = QPushButton(ag_tr("Copy JSON config"))
         copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(config_json))
-        close_btn = QPushButton("Close")
+        close_btn = QPushButton(ag_tr("Close"))
         close_btn.clicked.connect(dlg.accept)
         btn_row.addWidget(copy_btn)
         btn_row.addStretch()
@@ -172,7 +170,7 @@ class QgisMCPDialog(QDialog):
             reason = self.server.start_error or "unknown error"
             self.server = None
             self._refresh_ui()
-            self.status_label.setText(f"Server: failed to start - {reason}")
+            self.status_label.setText(ag_trf('Server: failed to start - {0}', reason))
 
     def stop_server(self):
         if self.server:
@@ -184,9 +182,9 @@ class QgisMCPDialog(QDialog):
         """Sync button/label state with actual server state."""
         running = self.server is not None and self.server.running
         if running:
-            self.status_label.setText(f"Server: Running on port {self.server.port}")
+            self.status_label.setText(ag_trf('Server: Running on port {0}', self.server.port))
         else:
-            self.status_label.setText("Server: Stopped")
+            self.status_label.setText(ag_tr("Server: Stopped"))
         self.start_button.setEnabled(not running)
         self.stop_button.setEnabled(running)
         self.port_spin.setEnabled(not running)

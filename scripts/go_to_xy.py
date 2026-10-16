@@ -5,26 +5,27 @@ from qgis.core import (QgsPointXY, QgsGeometry, QgsFeature, QgsVectorLayer, QgsP
                        QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsCoordinateTransformContext, Qgis)
 from qgis.gui import QgsProjectionSelectionWidget, QgsMapToolEmitPoint
 from qgis.utils import iface
+from .translation import ag_tr, ag_trf
 
 class GoToXYDialog(QDialog):
     def __init__(self, iface, parent=None):
         super().__init__(parent)
         self.iface = iface
-        self.setWindowTitle("Go to XY")
+        self.setWindowTitle(ag_tr("Go to XY"))
         
         self.layout = QVBoxLayout()
         
         self.coord_type = QComboBox()
         self.coord_type.addItems(["Projected Coordinates", "Decimal Degrees"])
         self.coord_type.currentIndexChanged.connect(self.update_input_labels)
-        self.layout.addWidget(QLabel("Coordinate Type:"))
+        self.layout.addWidget(QLabel(ag_tr("Coordinate Type:")))
         self.layout.addWidget(self.coord_type)
         
         self.input_layout = QHBoxLayout()
-        self.label_x = QLabel("X:")
+        self.label_x = QLabel(ag_tr("X:"))
         self.input_x = QLineEdit()
         self.input_x.setPlaceholderText("699550")
-        self.label_y = QLabel("Y:")
+        self.label_y = QLabel(ag_tr("Y:"))
         self.input_y = QLineEdit()
         self.input_y.setPlaceholderText("9557824")
         self.input_layout.addWidget(self.label_x)
@@ -37,14 +38,14 @@ class GoToXYDialog(QDialog):
         project_crs = self.iface.mapCanvas().mapSettings().destinationCrs()
         self.crs_selector.setCrs(project_crs)
         self.crs_selector.crsChanged.connect(self.crs_changed)
-        self.layout.addWidget(QLabel("Input CRS:"))
+        self.layout.addWidget(QLabel(ag_tr("Input CRS:")))
         self.layout.addWidget(self.crs_selector)
         
-        self.create_point = QCheckBox("Create point marker")
+        self.create_point = QCheckBox(ag_tr("Create point marker"))
         self.create_point.setChecked(True)
         self.layout.addWidget(self.create_point)
         
-        self.button = QPushButton("Go")
+        self.button = QPushButton(ag_tr("Go"))
         self.button.clicked.connect(self.go_to_coordinates)
         self.button.setStyleSheet("QPushButton { font-weight: bold; font-size: 14px; padding: 10px; }")
         self.layout.addWidget(self.button)
@@ -60,20 +61,20 @@ class GoToXYDialog(QDialog):
             self.history_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         
         self.history_table.itemSelectionChanged.connect(self.load_history_item)
-        self.layout.addWidget(QLabel("History:"))
+        self.layout.addWidget(QLabel(ag_tr("History:")))
         self.layout.addWidget(self.history_table)
         
-        self.capture_button = QPushButton("Capture Coordinate")
+        self.capture_button = QPushButton(ag_tr("Capture Coordinate"))
         self.capture_button.clicked.connect(self.capture_coordinate)
         self.layout.addWidget(self.capture_button)
         
         self.button_layout = QHBoxLayout()
         
-        self.clear_history_button = QPushButton("Clear History")
+        self.clear_history_button = QPushButton(ag_tr("Clear History"))
         self.clear_history_button.clicked.connect(self.clear_history)
         self.button_layout.addWidget(self.clear_history_button)
         
-        self.copy_coordinates_button = QPushButton("Copy Coordinates")
+        self.copy_coordinates_button = QPushButton(ag_tr("Copy Coordinates"))
         self.copy_coordinates_button.clicked.connect(self.copy_coordinates)
         self.button_layout.addWidget(self.copy_coordinates_button)
         
@@ -89,16 +90,16 @@ class GoToXYDialog(QDialog):
     def update_input_labels(self):
         coord_type = self.coord_type.currentText()
         if coord_type == "Decimal Degrees":
-            self.label_x.setText("Longitude:")
-            self.label_y.setText("Latitude:")
+            self.label_x.setText(ag_tr("Longitude:"))
+            self.label_y.setText(ag_tr("Latitude:"))
             self.input_x.setPlaceholderText("-79.1994")
             self.input_y.setPlaceholderText("-3.9961")
             with QSignalBlocker(self.crs_selector):
                 self.crs_selector.setCrs(QgsCoordinateReferenceSystem("EPSG:4326"))
             self.crs_selector.setEnabled(False)
         else:
-            self.label_x.setText("X:")
-            self.label_y.setText("Y:")
+            self.label_x.setText(ag_tr("X:"))
+            self.label_y.setText(ag_tr("Y:"))
             self.input_x.setPlaceholderText("699550")
             self.input_y.setPlaceholderText("9557824")
             self.crs_selector.setEnabled(True)

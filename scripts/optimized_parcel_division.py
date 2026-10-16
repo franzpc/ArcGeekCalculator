@@ -6,6 +6,7 @@ from qgis.core import (Qgis, QgsProcessing, QgsProcessingAlgorithm,
                        QgsSpatialIndex, QgsProcessingParameterBoolean,
                        QgsProcessingParameterEnum, QgsCoordinateTransform)
 import math
+from .translation import ag_tr, ag_trf
 
 # Qt5/Qt6 - QGIS 3/QGIS 4 compatibility for enums
 try:
@@ -72,14 +73,14 @@ class OptimizedParcelDivisionAlgorithm(QgsProcessingAlgorithm):
         ref_source = self.parameterAsSource(parameters, self.REFERENCE_LINES, context)
 
         remainder_labels = ['redistribute evenly', 'split between corner lots', 'place in last lot']
-        feedback.pushInfo(f"Input layer loaded. Feature count: {source.featureCount()}")
-        feedback.pushInfo(f"Lot width: {lot_width}")
-        feedback.pushInfo(f"Target lot area: {target_area if target_area > 0 else 'not set (dividing by width)'}")
-        feedback.pushInfo(f"Merge threshold: {merge_threshold * 100}% of average area")
-        feedback.pushInfo(f"Remainder distribution: {remainder_labels[remainder_mode]}")
-        feedback.pushInfo(f"Corner lot width: {corner_width if corner_width > 0 else 'same as lot width'}")
-        feedback.pushInfo(f"Two rows of lots: {two_rows}")
-        feedback.pushInfo(f"Frontage reference lines: {'yes' if ref_source is not None else 'no'}")
+        feedback.pushInfo(ag_trf('Input layer loaded. Feature count: {0}', source.featureCount()))
+        feedback.pushInfo(ag_trf('Lot width: {0}', lot_width))
+        feedback.pushInfo(ag_trf('Target lot area: {0}', target_area if target_area > 0 else 'not set (dividing by width)'))
+        feedback.pushInfo(ag_trf('Merge threshold: {0}% of average area', merge_threshold * 100))
+        feedback.pushInfo(ag_trf('Remainder distribution: {0}', remainder_labels[remainder_mode]))
+        feedback.pushInfo(ag_trf('Corner lot width: {0}', corner_width if corner_width > 0 else 'same as lot width'))
+        feedback.pushInfo(ag_trf('Two rows of lots: {0}', two_rows))
+        feedback.pushInfo(ag_trf('Frontage reference lines: {0}', 'yes' if ref_source is not None else 'no'))
 
         fields = source.fields()
         (sink, dest_id) = self.parameterAsSink(parameters, self.OUTPUT, context,
@@ -98,7 +99,7 @@ class OptimizedParcelDivisionAlgorithm(QgsProcessingAlgorithm):
 
             geom = feature.geometry()
             if geom is None or geom.isEmpty():
-                feedback.pushInfo(f"Feature {current + 1} has no geometry. Skipping.")
+                feedback.pushInfo(ag_trf('Feature {0} has no geometry. Skipping.', current + 1))
                 continue
 
             if not geom.isGeosValid():
@@ -149,7 +150,7 @@ class OptimizedParcelDivisionAlgorithm(QgsProcessingAlgorithm):
 
             feedback.setProgress(int((current + 1) * total))
 
-        feedback.pushInfo(f"Processing completed. {lots_created} parcels created.")
+        feedback.pushInfo(ag_trf('Processing completed. {0} parcels created.', lots_created))
         return {self.OUTPUT: dest_id}
 
     def _load_reference_lines(self, ref_source, target_crs, context):
@@ -775,4 +776,4 @@ class OptimizedParcelDivisionAlgorithm(QgsProcessingAlgorithm):
         return OptimizedParcelDivisionAlgorithm()
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)

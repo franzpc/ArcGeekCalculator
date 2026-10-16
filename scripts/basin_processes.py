@@ -2,6 +2,7 @@ import math
 from qgis.core import QgsGeometry, QgsPointXY, QgsRasterBandStats, QgsFeature, QgsField, QgsVectorLayer
 from qgis.analysis import QgsRasterCalculatorEntry, QgsRasterCalculator
 from qgis.PyQt.QtCore import QVariant
+from .translation import ag_tr, ag_trf
 
 def neighbor_average_interpolation(dem_layer, point):
     x_res = dem_layer.rasterUnitsPerPixelX()
@@ -26,7 +27,7 @@ def neighbor_average_interpolation(dem_layer, point):
 def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, stream_order_field, mean_slope_degrees, feedback):
     # Check if DEM layer is valid
     if not dem_layer or not dem_layer.isValid():
-        feedback.reportError("Invalid DEM layer. Cannot proceed with calculations.")
+        feedback.reportError(ag_tr("Invalid DEM layer. Cannot proceed with calculations."))
         return None
 
     basin_area = sum([f.geometry().area() for f in basin_source.getFeatures()]) / 1e6  # m² to km²
@@ -52,7 +53,7 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
         relief = max_elevation - min_elevation
         mean_elevation = dem_stats.mean 
     except Exception as e:
-        feedback.reportError(f"Error calculating DEM statistics: {str(e)}")
+        feedback.reportError(ag_trf('Error calculating DEM statistics: {0}', str(e)))
         max_elevation = min_elevation = relief = mean_elevation = None
 
     mean_stream_length = total_stream_length / total_stream_number if total_stream_number != 0 else None
@@ -106,15 +107,15 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
             end_elevation = upstream_elevation
 
         # Print elevation values for verification
-        feedback.pushInfo(f"Start Elevation (highest point): {start_elevation}")
-        feedback.pushInfo(f"End Elevation (lowest point): {end_elevation}")
+        feedback.pushInfo(ag_trf('Start Elevation (highest point): {0}', start_elevation))
+        feedback.pushInfo(ag_trf('End Elevation (lowest point): {0}', end_elevation))
 
         # Calculate slope only if both elevations are valid
         slope_s = (start_elevation - end_elevation) / (main_channel_length * 1000)
         slope_percent = slope_s * 100
-        feedback.pushInfo(f"Slope: {slope_percent}%")
+        feedback.pushInfo(ag_trf('Slope: {0}%', slope_percent))
     else:
-        feedback.pushInfo("Warning: Unable to calculate slope due to invalid elevation values")
+        feedback.pushInfo(ag_tr("Warning: Unable to calculate slope due to invalid elevation values"))
         start_elevation = end_elevation = slope_s = slope_percent = None
     middle_distance = main_channel_length / (basin_area ** 0.5)
 
@@ -207,7 +208,7 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
         "Length of Overland Flow (Lo)": {"value": length_of_overland_flow, "unit": "km", "interpretation": get_length_of_overland_flow_interpretation(length_of_overland_flow)},
         "Constant of Channel Maintenance (C)": {"value": 1/drainage_density if drainage_density != 0 else None, "unit": "km²/km", "interpretation": get_constant_channel_maintenance_interpretation(1/drainage_density if drainage_density != 0 else None)},
         "Infiltration Number (If)": {"value": infiltration_number, "unit": "", "interpretation": get_infiltration_number_interpretation(infiltration_number)},
-        "Stream Order (Strahler)": {"value": max(stream_order), "unit": "", "interpretation": f"Highest stream order (Strahler): {max(stream_order)}"},
+        "Stream Order (Strahler)": {"value": max(stream_order), "unit": "", "interpretation": ag_trf('Highest stream order (Strahler): {0}', max(stream_order))},
         "Number of Streams (Nu)": {"value": total_stream_number, "unit": "", "interpretation": "Total number of stream segments"},
         "Mean Stream Length (Lm)": {"value": mean_stream_length, "unit": "km", "interpretation": "Average length of streams"},
         "Bifurcation Ratio (Rb)": {"value": bifurcation_ratio, "unit": "", "interpretation": get_bifurcation_ratio_interpretation(bifurcation_ratio)},

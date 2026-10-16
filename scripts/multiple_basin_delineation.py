@@ -8,6 +8,7 @@ from qgis.core import (QgsProcessing, QgsProcessingAlgorithm, QgsProcessingParam
                        QgsProcessingException, QgsFeatureSink, QgsFeature, 
                        QgsProcessingParameterVectorLayer, QgsProcessingParameterBoolean,
                        QgsUnitTypes, QgsSpatialIndex, QgsMessageLog, Qgis)
+from .translation import ag_tr, ag_trf
 
 class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
     """
@@ -39,14 +40,14 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         # Input DEM
         self.addParameter(QgsProcessingParameterRasterLayer(
             self.INPUT_DEM, 
-            'Input DEM (30m recommended)',
+            ag_tr('Input DEM (30m recommended)'),
             optional=False
         ))
         
         # Input point shapefile
         self.addParameter(QgsProcessingParameterVectorLayer(
             self.INPUT_POINTS,
-            'Input Point Shapefile',
+            ag_tr('Input Point Shapefile'),
             types=[QgsProcessing.SourceType.TypeVectorPoint],
             optional=False
         ))
@@ -54,7 +55,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         # Flow accumulation threshold
         self.addParameter(QgsProcessingParameterNumber(
             self.FLOW_THRESHOLD,
-            'Flow Accumulation Threshold',
+            ag_tr('Flow Accumulation Threshold'),
             type=QgsProcessingParameterNumber.Type.Integer,
             minValue=1,
             maxValue=100000,
@@ -65,7 +66,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         # Smoothing parameters
         self.addParameter(QgsProcessingParameterNumber(
             self.SMOOTH_ITERATIONS,
-            'Smooth Iterations',
+            ag_tr('Smooth Iterations'),
             type=QgsProcessingParameterNumber.Type.Integer,
             minValue=1,
             maxValue=10,
@@ -74,7 +75,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         
         self.addParameter(QgsProcessingParameterNumber(
             self.SMOOTH_OFFSET,
-            'Smooth Offset',
+            ag_tr('Smooth Offset'),
             type=QgsProcessingParameterNumber.Type.Double,
             minValue=0.0,
             maxValue=0.5,
@@ -84,13 +85,13 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         # Point processing options
         self.addParameter(QgsProcessingParameterBoolean(
             self.PROCESS_ALL_POINTS,
-            'Process All Points',
+            ag_tr('Process All Points'),
             defaultValue=True
         ))
         
         self.addParameter(QgsProcessingParameterNumber(
             self.MAX_POINTS,
-            'Maximum Points to Process (if not processing all)',
+            ag_tr('Maximum Points to Process (if not processing all)'),
             type=QgsProcessingParameterNumber.Type.Integer,
             minValue=1,
             maxValue=1000,
@@ -100,25 +101,25 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         # Output parameters
         self.addParameter(QgsProcessingParameterFeatureSink(
             self.OUTPUT_STREAMS,
-            'Global Stream Network',
+            ag_tr('Global Stream Network'),
             QgsProcessing.SourceType.TypeVectorLine
         ))
         
         self.addParameter(QgsProcessingParameterFeatureSink(
             self.OUTPUT_INTERSECTION_POINTS,
-            'Snapped Pour Points',
+            ag_tr('Snapped Pour Points'),
             QgsProcessing.SourceType.TypeVectorPoint
         ))
         
         self.addParameter(QgsProcessingParameterFeatureSink(
             self.OUTPUT_BASINS,
-            'Watershed Basins (with Drainage Areas)',
+            ag_tr('Watershed Basins (with Drainage Areas)'),
             QgsProcessing.SourceType.TypeVectorPolygon
         ))
         
         self.addParameter(QgsProcessingParameterFeatureSink(
             self.OUTPUT_BASIN_STREAMS,
-            'Local Stream Network',
+            ag_tr('Local Stream Network'),
             QgsProcessing.SourceType.TypeVectorLine
         ))
 
@@ -141,19 +142,19 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             if not points_layer.isValid():
                 raise QgsProcessingException(self.tr('Invalid points layer'))
             
-            feedback.pushInfo("Starting complete watershed analysis workflow...")
-            feedback.pushInfo(f"Using Flow Accumulation Threshold: {flow_threshold}")
+            feedback.pushInfo(ag_tr("Starting complete watershed analysis workflow..."))
+            feedback.pushInfo(ag_trf('Using Flow Accumulation Threshold: {0}', flow_threshold))
             
             # Step 1: Generate stream network (30% progress)
             feedback.setProgress(5)
-            feedback.pushInfo("Step 1: Generating stream network...")
+            feedback.pushInfo(ag_tr("Step 1: Generating stream network..."))
             stream_network = self.generate_stream_network(
                 dem_layer, flow_threshold, smooth_iterations, smooth_offset, context, feedback
             )
             
             # Step 2: Snap input points to stream network (60% progress)
             feedback.setProgress(30)
-            feedback.pushInfo("Step 2: Snapping input points to stream network...")
+            feedback.pushInfo(ag_tr("Step 2: Snapping input points to stream network..."))
             snapped_points = self.snap_points_to_stream(points_layer, stream_network, context, feedback)
             
             if not snapped_points or snapped_points.featureCount() == 0:
@@ -163,26 +164,26 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             feedback.setProgress(60)
             pour_points = snapped_points  # Use snapped points directly
             if not process_all_points:
-                feedback.pushInfo(f"Limiting processing to {max_points} points...")
+                feedback.pushInfo(ag_trf('Limiting processing to {0} points...', max_points))
                 pour_points = self.limit_points(snapped_points, max_points, context, feedback)
             
-            feedback.pushInfo(f"Processing {pour_points.featureCount()} pour points...")
+            feedback.pushInfo(ag_trf('Processing {0} pour points...', pour_points.featureCount()))
             
             # Step 3: Run watershed delineation (85% progress)
             feedback.setProgress(70)
-            feedback.pushInfo("Step 3: Running watershed basin delineation...")
+            feedback.pushInfo(ag_tr("Step 3: Running watershed basin delineation..."))
             basin_polygons, basin_streams = self.run_watershed_delineation(
                 dem_layer, pour_points, stream_network, smooth_iterations, smooth_offset, context, feedback
             )
             
             # Step 4: Calculate drainage areas (95% progress)
             feedback.setProgress(90)
-            feedback.pushInfo("Step 4: Calculating drainage areas...")
+            feedback.pushInfo(ag_tr("Step 4: Calculating drainage areas..."))
             final_basins = self.calculate_drainage_areas(basin_polygons, context, feedback)
             
             # Prepare output sinks (100% progress)
             feedback.setProgress(95)
-            feedback.pushInfo("Preparing outputs...")
+            feedback.pushInfo(ag_tr("Preparing outputs..."))
             
             # Stream network output
             stream_sink, stream_dest_id = self.parameterAsSink(
@@ -221,7 +222,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                 basin_streams_sink.addFeature(feature, QgsFeatureSink.Flag.FastInsert)
             
             feedback.setProgress(100)
-            feedback.pushInfo("Watershed analysis completed successfully!")
+            feedback.pushInfo(ag_tr("Watershed analysis completed successfully!"))
             
             return {
                 self.OUTPUT_STREAMS: stream_dest_id,
@@ -231,7 +232,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             }
             
         except Exception as e:
-            feedback.reportError(f"Error in watershed analysis: {str(e)}")
+            feedback.reportError(ag_trf('Error in watershed analysis: {0}', str(e)))
             raise QgsProcessingException(str(e))
 
     def generate_stream_network(self, dem_layer, threshold, smooth_iterations, smooth_offset, context, feedback):
@@ -249,13 +250,13 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                 raster_size = resampled_dem.width() * resampled_dem.height()
                 if raster_size <= self.MAX_RASTER_SIZE:
                     if attempt > 0:
-                        feedback.pushInfo(f'DEM resampled to {current_cell_size:.2f} units per pixel for processing.')
+                        feedback.pushInfo(ag_trf('DEM resampled to {0:.2f} units per pixel for processing.', current_cell_size))
                     break
                 
                 cell_size_multiplier *= 3
             
             if raster_size > self.MAX_RASTER_SIZE:
-                raise QgsProcessingException('Input DEM is too large to process efficiently even after resampling.')
+                raise QgsProcessingException(ag_tr('Input DEM is too large to process efficiently even after resampling.'))
             
             # Fill DEM
             filled_dem = processing.run("grass7:r.fill.dir", {
@@ -302,7 +303,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             return ordered_streams
             
         except Exception as e:
-            feedback.reportError(f"Error generating stream network: {str(e)}")
+            feedback.reportError(ag_trf('Error generating stream network: {0}', str(e)))
             raise
 
     def calculate_stream_orders(self, stream_layer, context, feedback):
@@ -346,7 +347,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             return layer
             
         except Exception as e:
-            feedback.reportError(f"Error calculating stream orders: {str(e)}")
+            feedback.reportError(ag_trf('Error calculating stream orders: {0}', str(e)))
             raise
 
     def get_stream_orders(self, feature, layer, index):
@@ -430,7 +431,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                       resampleAlg=gdal.GRA_NearestNeighbour, format='GTiff')
             return QgsRasterLayer(output_path, 'resampled_dem', 'gdal')
         except Exception as e:
-            feedback.reportError(f"Error resampling DEM: {str(e)}")
+            feedback.reportError(ag_trf('Error resampling DEM: {0}', str(e)))
             raise
 
     def limit_points(self, points_layer, max_points, context, feedback):
@@ -451,17 +452,17 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             limited_layer.dataProvider().addFeatures(features)
             limited_layer.updateExtents()
             
-            feedback.pushInfo(f"Limited to {len(features)} points for processing")
+            feedback.pushInfo(ag_trf('Limited to {0} points for processing', len(features)))
             return limited_layer
             
         except Exception as e:
-            feedback.reportError(f"Error limiting points: {str(e)}")
+            feedback.reportError(ag_trf('Error limiting points: {0}', str(e)))
             raise
 
     def snap_points_to_stream(self, points_layer, stream_layer, context, feedback):
         """Snap input points to the nearest stream network"""
         try:
-            feedback.pushInfo("Snapping points to stream network...")
+            feedback.pushInfo(ag_tr("Snapping points to stream network..."))
             
             # Use QGIS snap geometries to lines processing algorithm
             snapped_points = processing.run("native:snapgeometries", {
@@ -472,11 +473,11 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                 'OUTPUT': 'memory:snapped_points'
             }, context=context, feedback=feedback)['OUTPUT']
             
-            feedback.pushInfo(f"Snapped {snapped_points.featureCount()} points to stream network")
+            feedback.pushInfo(ag_trf('Snapped {0} points to stream network', snapped_points.featureCount()))
             return snapped_points
             
         except Exception as e:
-            feedback.reportError(f"Error snapping points to stream: {str(e)}")
+            feedback.reportError(ag_trf('Error snapping points to stream: {0}', str(e)))
             raise
 
     def run_watershed_delineation(self, dem_layer, pour_points, stream_layer, smooth_iterations, smooth_offset, context, feedback):
@@ -535,7 +536,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                 pour_point = point_feature.geometry().asPoint()
                 pour_point_str = f'{pour_point.x()},{pour_point.y()}'
                 
-                feedback.pushInfo(f"Processing pour point ID: {point_feature.id()}")
+                feedback.pushInfo(ag_trf('Processing pour point ID: {0}', point_feature.id()))
 
                 # Delineate basin
                 basin_raster = processing.run('grass7:r.water.outlet', {
@@ -615,7 +616,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                         stream_output_layer.dataProvider().addFeatures([new_stream_feature])
                 
                 except Exception as e:
-                    feedback.reportError(f"Error clipping streams for basin {basin_id_counter}: {str(e)}")
+                    feedback.reportError(ag_trf('Error clipping streams for basin {0}: {1}', basin_id_counter, str(e)))
                 
                 basin_id_counter += 1
 
@@ -625,7 +626,7 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             return basin_layer, stream_output_layer
             
         except Exception as e:
-            feedback.reportError(f"Error in watershed delineation: {str(e)}")
+            feedback.reportError(ag_trf('Error in watershed delineation: {0}', str(e)))
             raise
 
     def calculate_drainage_areas(self, basin_layer, context, feedback):
@@ -667,12 +668,12 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
             
             basin_layer.commitChanges()
             
-            feedback.pushInfo(f"Calculated drainage areas for {basin_layer.featureCount()} basins")
+            feedback.pushInfo(ag_trf('Calculated drainage areas for {0} basins', basin_layer.featureCount()))
             return basin_layer
             
         except Exception as e:
             basin_layer.rollBack()
-            feedback.reportError(f"Error calculating drainage areas: {str(e)}")
+            feedback.reportError(ag_trf('Error calculating drainage areas: {0}', str(e)))
             raise
 
     def name(self):
@@ -728,4 +729,4 @@ class MultipleBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         return MultipleBasinDelineationAlgorithm()
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)

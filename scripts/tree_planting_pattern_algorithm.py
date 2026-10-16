@@ -14,6 +14,7 @@ import re
 import os
 import tempfile
 import processing
+from .translation import ag_tr, ag_trf
 
 class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
     """
@@ -46,7 +47,7 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterEnum(
                 self.PATTERN_TYPE,
                 self.tr('Planting pattern'),
-                options=['Triangular/Quincunx (Tresbolillo)', 'Rectangular/Square', 'Five of Diamonds (Cinco de Oros)', 'Keyline (requires DEM)', 'Random Distribution'],
+                options=[ag_tr('Triangular/Quincunx (Tresbolillo)'), ag_tr('Rectangular/Square'), ag_tr('Five of Diamonds (Cinco de Oros)'), ag_tr('Keyline (requires DEM)'), ag_tr('Random Distribution')],
                 defaultValue=0
             )
         )
@@ -104,15 +105,15 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
         try:
             spacing_x, spacing_y = self.parse_spacing(spacing_str)
         except (ValueError, TypeError) as e:
-            raise QgsProcessingException(f"Invalid spacing format: {e}")
+            raise QgsProcessingException(ag_trf('Invalid spacing format: {0}', e))
         
         if source is None:
-            raise QgsProcessingException("Could not load source layer")
+            raise QgsProcessingException(ag_tr("Could not load source layer"))
         
         # Ya no necesitamos validar slope_analysis por separado porque es automático
         has_dem = dem_layer is not None
         if pattern_type == 3 and not has_dem:
-            raise QgsProcessingException("Keyline pattern requires a DEM layer")
+            raise QgsProcessingException(ag_tr("Keyline pattern requires a DEM layer"))
         
         # Create output layer fields - INCLUIR slope field desde el inicio si es necesario
         fields = QgsFields()
@@ -130,7 +131,7 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
         )
         
         if sink is None:
-            raise QgsProcessingException("Could not create output layer")
+            raise QgsProcessingException(ag_tr("Could not create output layer"))
         
         # Initialize counters
         triangular_count = 0
@@ -143,31 +144,31 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
         # Generate slope raster AUTOMÁTICAMENTE si hay DEM
         slope_layer = None
         if has_dem:  # Si hay DEM, hacer análisis automáticamente
-            feedback.pushInfo("DEM detected - performing automatic slope analysis...")
+            feedback.pushInfo(ag_tr("DEM detected - performing automatic slope analysis..."))
             slope_layer = self.generate_slope_map(dem_layer, source, context, feedback)
             if not slope_layer or not slope_layer.isValid():
-                feedback.pushWarning("Could not generate slope map, continuing without slope analysis...")
+                feedback.pushWarning(ag_tr("Could not generate slope map, continuing without slope analysis..."))
                 slope_analysis = False  # Desactivar si falla
             else:
-                feedback.pushInfo("Slope analysis will be included automatically.")
+                feedback.pushInfo(ag_tr("Slope analysis will be included automatically."))
         else:
-            feedback.pushInfo("No DEM provided - slope analysis disabled.")
+            feedback.pushInfo(ag_tr("No DEM provided - slope analysis disabled."))
         
         # Prepare CRS transformation if needed
         transform = None
         if slope_analysis and slope_layer and source.crs() != slope_layer.crs():
             transform = QgsCoordinateTransform(source.crs(), slope_layer.crs(), context.project())
-            feedback.pushInfo(f"CRS transform for slope sampling prepared ({source.crs().authid()} -> {slope_layer.crs().authid()}).")
+            feedback.pushInfo(ag_trf('CRS transform for slope sampling prepared ({0} -> {1}).', source.crs().authid(), slope_layer.crs().authid()))
         
         # Prepare streams layer for keyline if needed - OPTIMIZADO PARA REUTILIZAR DEM
         streams_layer = None
         clipped_dem = None
         if pattern_type == 3 and has_dem:
-            feedback.pushInfo("Preparing Keyline pattern (optimized for performance)...")
+            feedback.pushInfo(ag_tr("Preparing Keyline pattern (optimized for performance)..."))
             # OPTIMIZACIÓN: Reutilizar el DEM ya clipeado si existe, sino usar el original
             if slope_layer:
                 # Intentar reutilizar el área ya clipeada para pendientes
-                feedback.pushInfo("Reusing clipped DEM area for Keyline processing...")
+                feedback.pushInfo(ag_tr("Reusing clipped DEM area for Keyline processing..."))
                 clipped_dem = slope_layer  # Reutilizar si es posible
             else:
                 # Solo clipear si no se hizo antes
@@ -185,7 +186,7 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
             if clipped_dem and clipped_dem.isValid():
                 streams_layer = self.generate_stream_network(clipped_dem, context, feedback)
             else:
-                feedback.pushWarning("Could not prepare DEM for Keyline, using simplified approach...")
+                feedback.pushWarning(ag_tr("Could not prepare DEM for Keyline, using simplified approach..."))
                 clipped_dem = dem_layer  # Usar DEM original como fallback
         
         # Process each feature
@@ -210,7 +211,7 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
             if border_margin > 0:
                 buffered_geom = geom.buffer(-border_margin, 5)
                 if buffered_geom.isEmpty():
-                    feedback.pushInfo(f"Feature {feature.id()} became empty after applying border margin")
+                    feedback.pushInfo(ag_trf('Feature {0} became empty after applying border margin', feature.id()))
                     continue
                 working_geom = buffered_geom
             
@@ -292,44 +293,44 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
     def generate_slope_map(self, dem_layer, source_layer, context, feedback):
         """Generates a slope map from the DEM, clipped to the source layer's extent. - COPIADO DEL NUEVO SCRIPT"""
         try:
-            feedback.pushInfo("Creating union geometry of all polygons...")
+            feedback.pushInfo(ag_tr("Creating union geometry of all polygons..."))
             union_geom = QgsGeometry()
             for feature in source_layer.getFeatures():
                 union_geom = union_geom.combine(feature.geometry()) if not union_geom.isEmpty() else feature.geometry()
             
             if union_geom.isEmpty():
-                feedback.pushWarning("The union geometry of the polygons is empty.")
+                feedback.pushWarning(ag_tr("The union geometry of the polygons is empty."))
                 return None
 
             buffered_union = union_geom.buffer(50, 5) # Buffer to avoid edge effects
             
-            feedback.pushInfo("Clipping DEM to polygon area...")
+            feedback.pushInfo(ag_tr("Clipping DEM to polygon area..."))
             clipped_dem = self.clip_dem_to_polygon(dem_layer, buffered_union, context, feedback)
             
             if not clipped_dem or not clipped_dem.isValid():
-                feedback.pushWarning("DEM clipping failed. Cannot generate slope map.")
+                feedback.pushWarning(ag_tr("DEM clipping failed. Cannot generate slope map."))
                 return None
             
-            feedback.pushInfo(f"Clipped DEM created. Extent: {clipped_dem.extent().toString()}")
-            feedback.pushInfo("Calculating slope from clipped DEM...")
+            feedback.pushInfo(ag_trf('Clipped DEM created. Extent: {0}', clipped_dem.extent().toString()))
+            feedback.pushInfo(ag_tr("Calculating slope from clipped DEM..."))
             
             result = processing.run('native:slope', {'INPUT': clipped_dem, 'Z_FACTOR': 1, 'OUTPUT': 'TEMPORARY_OUTPUT'}, 
                                     context=context, feedback=feedback, is_child_algorithm=True)
             
             slope_layer = QgsProcessingUtils.mapLayerFromString(result['OUTPUT'], context)
             if not slope_layer or not slope_layer.isValid():
-                feedback.pushWarning("The resulting slope raster is not valid.")
+                feedback.pushWarning(ag_tr("The resulting slope raster is not valid."))
                 return None
             
             # Diagnostic: Report stats of the generated slope raster
             stats = slope_layer.dataProvider().bandStatistics(1, QgsRasterBandStats.Stats.All)
-            feedback.pushInfo(f"Statistics for generated slope raster: MIN={stats.minimumValue:.2f}, MAX={stats.maximumValue:.2f}")
+            feedback.pushInfo(ag_trf('Statistics for generated slope raster: MIN={0:.2f}, MAX={1:.2f}', stats.minimumValue, stats.maximumValue))
 
-            feedback.pushInfo("Slope map generated successfully.")
+            feedback.pushInfo(ag_tr("Slope map generated successfully."))
             return slope_layer
             
         except Exception as e:
-            feedback.pushInfo(f"Error generating slope map: {e}")
+            feedback.pushInfo(ag_trf('Error generating slope map: {0}', e))
             return None
 
     def sample_slope_at_point(self, point, slope_layer, transform=None):
@@ -405,18 +406,18 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
                       dstNodata=-9999, format='GTiff')
             clipped_layer = QgsRasterLayer(_out_path, 'Clipped DEM')
             if not clipped_layer.isValid():
-                feedback.pushWarning("DEM clipping resulted in an invalid layer.")
+                feedback.pushWarning(ag_tr("DEM clipping resulted in an invalid layer."))
                 return None
             return clipped_layer
             
         except Exception as e:
-            feedback.pushInfo(f"Error clipping DEM: {e}")
+            feedback.pushInfo(ag_trf('Error clipping DEM: {0}', e))
             return dem_layer
 
     def generate_stream_network(self, dem_layer, context, feedback):
         """Generate stream network from DEM"""
         try:
-            feedback.pushInfo("Generating stream network for keyline analysis...")
+            feedback.pushInfo(ag_tr("Generating stream network for keyline analysis..."))
             
             filled_dem = processing.run("grass7:r.fill.dir", {
                 'input': dem_layer,
@@ -449,11 +450,11 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
             }, context=context, feedback=feedback)['stream_vector']
             
             streams_layer = QgsProcessingUtils.mapLayerFromString(streams, context)
-            feedback.pushInfo(f"Generated {streams_layer.featureCount()} stream segments")
+            feedback.pushInfo(ag_trf('Generated {0} stream segments', streams_layer.featureCount()))
             return streams_layer
             
         except Exception as e:
-            feedback.pushInfo(f"Error generating stream network: {e}")
+            feedback.pushInfo(ag_trf('Error generating stream network: {0}', e))
             return None
 
     def generate_keyline_points_original(self, geom, dem_layer, streams_layer, contour_interval, spacing, context, feedback):
@@ -461,7 +462,7 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
         points = []
         
         try:
-            feedback.pushInfo("Generating keyline pattern...")
+            feedback.pushInfo(ag_tr("Generating keyline pattern..."))
             
             # Step 1: Generate points around entire stream network continuously
             stream_points = []
@@ -485,7 +486,7 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
                 if all_stream_lines:
                     stream_points = self.generate_continuous_stream_points(all_stream_lines, spacing, geom)
             
-            feedback.pushInfo(f"Generated {len(stream_points)} continuous points around streams")
+            feedback.pushInfo(ag_trf('Generated {0} continuous points around streams', len(stream_points)))
             
             # Step 2: Generate contour lines
             contour_points = []
@@ -512,10 +513,10 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
                             contour_layer, closest_stream_point, spacing, geom, stream_points
                         )
                 
-                feedback.pushInfo(f"Generated {len(contour_points)} contour continuation points")
+                feedback.pushInfo(ag_trf('Generated {0} contour continuation points', len(contour_points)))
                 
             except Exception as e:
-                feedback.pushInfo(f"Contour generation error: {e}")
+                feedback.pushInfo(ag_trf('Contour generation error: {0}', e))
             
             # Step 4: Combine points intelligently avoiding duplicates between sources
             if stream_points and contour_points:
@@ -544,10 +545,10 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
                 cleaned_points = self.remove_points_too_close_to_streams(points, streams_layer, geom, spacing * 0.8)  # Use 80% tolerance
                 points = cleaned_points
             
-            feedback.pushInfo(f"Total keyline points after intelligent combination: {len(points)}")
+            feedback.pushInfo(ag_trf('Total keyline points after intelligent combination: {0}', len(points)))
             
         except Exception as e:
-            feedback.pushInfo(f"Keyline generation error: {e}")
+            feedback.pushInfo(ag_trf('Keyline generation error: {0}', e))
         
         return points
 
@@ -841,10 +842,10 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
                     point = point_geom.asPoint()
                     points.append(QgsPointXY(point.x(), point.y()))
             
-            feedback.pushInfo(f"Generated {len(points)} random points (min: {min_distance}m, max: {max_distance}m)")
+            feedback.pushInfo(ag_trf('Generated {0} random points (min: {1}m, max: {2}m)', len(points), min_distance, max_distance))
             
         except Exception as e:
-            feedback.pushInfo(f"Random points generation error: {e}")
+            feedback.pushInfo(ag_trf('Random points generation error: {0}', e))
         
         return points
 
@@ -959,128 +960,128 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
         """Generate comprehensive report including slope analysis if enabled"""
         
         feedback.pushInfo("=" * 80)
-        feedback.pushInfo("TREE PLANTING COMPLETE REPORT")
+        feedback.pushInfo(ag_tr("TREE PLANTING COMPLETE REPORT"))
         feedback.pushInfo("=" * 80)
         
-        feedback.pushInfo("📏 POLYGON INFORMATION:")
-        feedback.pushInfo(f"   • Total area: {total_area_ha:.4f} ha")
+        feedback.pushInfo(ag_tr("📏 POLYGON INFORMATION:"))
+        feedback.pushInfo(ag_trf('   • Total area: {0:.4f} ha', total_area_ha))
         feedback.pushInfo("")
         
-        feedback.pushInfo("📐 SPACING CONFIGURATION:")
+        feedback.pushInfo(ag_tr("📐 SPACING CONFIGURATION:"))
         if spacing_x == spacing_y:
-            feedback.pushInfo(f"   • Spacing: {spacing_x} x {spacing_y} m (Square)")
+            feedback.pushInfo(ag_trf('   • Spacing: {0} x {1} m (Square)', spacing_x, spacing_y))
         else:
-            feedback.pushInfo(f"   • Spacing: {spacing_x} x {spacing_y} m (Rectangular)")
+            feedback.pushInfo(ag_trf('   • Spacing: {0} x {1} m (Rectangular)', spacing_x, spacing_y))
         feedback.pushInfo("")
         
         # Slope analysis information if enabled
         if slope_analysis:
-            feedback.pushInfo("🏔️ SLOPE ANALYSIS:")
-            feedback.pushInfo("   • Slope analysis: AUTOMATIC (DEM detected)")
-            feedback.pushInfo("   • 'slope' field added with values in degrees")
-            feedback.pushInfo("   • Slope values sampled directly from DEM")
+            feedback.pushInfo(ag_tr("🏔️ SLOPE ANALYSIS:"))
+            feedback.pushInfo(ag_tr("   • Slope analysis: AUTOMATIC (DEM detected)"))
+            feedback.pushInfo(ag_tr("   • 'slope' field added with values in degrees"))
+            feedback.pushInfo(ag_tr("   • Slope values sampled directly from DEM"))
             feedback.pushInfo("")
         else:
-            feedback.pushInfo("🏔️ SLOPE ANALYSIS:")
-            feedback.pushInfo("   • Slope analysis: DISABLED (no DEM)")
+            feedback.pushInfo(ag_tr("🏔️ SLOPE ANALYSIS:"))
+            feedback.pushInfo(ag_tr("   • Slope analysis: DISABLED (no DEM)"))
             feedback.pushInfo("")
         
         # Theoretical calculations
-        feedback.pushInfo("🧮 THEORETICAL CALCULATIONS (trees/ha):")
+        feedback.pushInfo(ag_tr("🧮 THEORETICAL CALCULATIONS (trees/ha):"))
         theoretical_trees_per_ha = 10000 / (spacing_x * spacing_y)
         theoretical_triangular_trees_per_ha = 11547 / (spacing_x ** 2) if spacing_x == spacing_y else 11547 / (spacing_x * spacing_y)
         theoretical_cincooros_trees_per_ha = theoretical_trees_per_ha * 2
         
-        feedback.pushInfo(f"   • Square/Rectangular pattern: {theoretical_trees_per_ha:.1f} trees/ha")
-        feedback.pushInfo(f"   • Triangular/Quincunx pattern: {theoretical_triangular_trees_per_ha:.1f} trees/ha")
-        feedback.pushInfo(f"   • Five of Diamonds pattern: {theoretical_cincooros_trees_per_ha:.1f} trees/ha")
+        feedback.pushInfo(ag_trf('   • Square/Rectangular pattern: {0:.1f} trees/ha', theoretical_trees_per_ha))
+        feedback.pushInfo(ag_trf('   • Triangular/Quincunx pattern: {0:.1f} trees/ha', theoretical_triangular_trees_per_ha))
+        feedback.pushInfo(ag_trf('   • Five of Diamonds pattern: {0:.1f} trees/ha', theoretical_cincooros_trees_per_ha))
         feedback.pushInfo("")
         
         # Actual results
-        feedback.pushInfo("🌳 ACTUAL RESULTS (with border margin):")
+        feedback.pushInfo(ag_tr("🌳 ACTUAL RESULTS (with border margin):"))
         actual_triangular_per_ha = triangular_count / total_area_ha if total_area_ha > 0 else 0
         actual_rectangular_per_ha = rectangular_count / total_area_ha if total_area_ha > 0 else 0
         actual_cincooros_per_ha = cincooros_count / total_area_ha if total_area_ha > 0 else 0
         
-        feedback.pushInfo(f"   • Square/Rectangular pattern: {actual_rectangular_per_ha:.1f} trees/ha")
-        feedback.pushInfo(f"   • Triangular/Quincunx pattern: {actual_triangular_per_ha:.1f} trees/ha")
-        feedback.pushInfo(f"   • Five of Diamonds pattern: {actual_cincooros_per_ha:.1f} trees/ha")
+        feedback.pushInfo(ag_trf('   • Square/Rectangular pattern: {0:.1f} trees/ha', actual_rectangular_per_ha))
+        feedback.pushInfo(ag_trf('   • Triangular/Quincunx pattern: {0:.1f} trees/ha', actual_triangular_per_ha))
+        feedback.pushInfo(ag_trf('   • Five of Diamonds pattern: {0:.1f} trees/ha', actual_cincooros_per_ha))
         if keyline_count > 0:
             actual_keyline_per_ha = keyline_count / total_area_ha if total_area_ha > 0 else 0
-            feedback.pushInfo(f"   • Keyline pattern: {actual_keyline_per_ha:.1f} trees/ha")
+            feedback.pushInfo(ag_trf('   • Keyline pattern: {0:.1f} trees/ha', actual_keyline_per_ha))
         if random_count > 0:
             actual_random_per_ha = random_count / total_area_ha if total_area_ha > 0 else 0
-            feedback.pushInfo(f"   • Random pattern: {actual_random_per_ha:.1f} trees/ha")
+            feedback.pushInfo(ag_trf('   • Random pattern: {0:.1f} trees/ha', actual_random_per_ha))
         feedback.pushInfo("")
         
         # Detailed count by pattern
-        feedback.pushInfo("📊 DETAILED COUNT BY PATTERN:")
+        feedback.pushInfo(ag_tr("📊 DETAILED COUNT BY PATTERN:"))
         
         if pattern_type == 0:
-            feedback.pushInfo(f"   • Triangular/Quincunx: {triangular_count} trees [SELECTED]")
+            feedback.pushInfo(ag_trf('   • Triangular/Quincunx: {0} trees [SELECTED]', triangular_count))
         else:
-            feedback.pushInfo(f"   • Triangular/Quincunx: {triangular_count} trees")
+            feedback.pushInfo(ag_trf('   • Triangular/Quincunx: {0} trees', triangular_count))
         
         if pattern_type == 1:
             if spacing_x == spacing_y:
-                feedback.pushInfo(f"   • Square: {rectangular_count} trees [SELECTED]")
+                feedback.pushInfo(ag_trf('   • Square: {0} trees [SELECTED]', rectangular_count))
             else:
-                feedback.pushInfo(f"   • Rectangular: {rectangular_count} trees [SELECTED]")
+                feedback.pushInfo(ag_trf('   • Rectangular: {0} trees [SELECTED]', rectangular_count))
         else:
             if spacing_x == spacing_y:
-                feedback.pushInfo(f"   • Square: {rectangular_count} trees")
+                feedback.pushInfo(ag_trf('   • Square: {0} trees', rectangular_count))
             else:
-                feedback.pushInfo(f"   • Rectangular: {rectangular_count} trees")
+                feedback.pushInfo(ag_trf('   • Rectangular: {0} trees', rectangular_count))
         
         if pattern_type == 2:
-            feedback.pushInfo(f"   • Five of Diamonds: {cincooros_count} trees [SELECTED]")
+            feedback.pushInfo(ag_trf('   • Five of Diamonds: {0} trees [SELECTED]', cincooros_count))
         else:
-            feedback.pushInfo(f"   • Five of Diamonds: {cincooros_count} trees")
+            feedback.pushInfo(ag_trf('   • Five of Diamonds: {0} trees', cincooros_count))
         
         if pattern_type == 3:
-            feedback.pushInfo(f"   • Keyline: {keyline_count} trees [SELECTED]")
+            feedback.pushInfo(ag_trf('   • Keyline: {0} trees [SELECTED]', keyline_count))
         elif keyline_count > 0:
-            feedback.pushInfo(f"   • Keyline: {keyline_count} trees")
+            feedback.pushInfo(ag_trf('   • Keyline: {0} trees', keyline_count))
         
         if pattern_type == 4:
-            feedback.pushInfo(f"   • Random: {random_count} trees [SELECTED]")
+            feedback.pushInfo(ag_trf('   • Random: {0} trees [SELECTED]', random_count))
         elif random_count > 0:
-            feedback.pushInfo(f"   • Random: {random_count} trees")
+            feedback.pushInfo(ag_trf('   • Random: {0} trees', random_count))
         
         feedback.pushInfo("")
         
         # Efficiency analysis
-        feedback.pushInfo("📈 EFFICIENCY ANALYSIS (BORDER MARGIN IMPACT):")
+        feedback.pushInfo(ag_tr("📈 EFFICIENCY ANALYSIS (BORDER MARGIN IMPACT):"))
         
         rect_efficiency = (actual_rectangular_per_ha / theoretical_trees_per_ha * 100) if theoretical_trees_per_ha > 0 else 0
         tri_efficiency = (actual_triangular_per_ha / theoretical_triangular_trees_per_ha * 100) if theoretical_triangular_trees_per_ha > 0 else 0
         cinco_efficiency = (actual_cincooros_per_ha / theoretical_cincooros_trees_per_ha * 100) if theoretical_cincooros_trees_per_ha > 0 else 0
         
-        feedback.pushInfo(f"   • Square/Rectangular efficiency: {rect_efficiency:.1f}%")
-        feedback.pushInfo(f"   • Triangular/Quincunx efficiency: {tri_efficiency:.1f}%")
-        feedback.pushInfo(f"   • Five of Diamonds efficiency: {cinco_efficiency:.1f}%")
+        feedback.pushInfo(ag_trf('   • Square/Rectangular efficiency: {0:.1f}%', rect_efficiency))
+        feedback.pushInfo(ag_trf('   • Triangular/Quincunx efficiency: {0:.1f}%', tri_efficiency))
+        feedback.pushInfo(ag_trf('   • Five of Diamonds efficiency: {0:.1f}%', cinco_efficiency))
         feedback.pushInfo("")
         
         # Recommendations
-        feedback.pushInfo("💡 RECOMMENDATIONS:")
+        feedback.pushInfo(ag_tr("💡 RECOMMENDATIONS:"))
         if tri_efficiency > rect_efficiency:
-            feedback.pushInfo("   • Triangular/Quincunx pattern is more efficient for this spacing")
+            feedback.pushInfo(ag_tr("   • Triangular/Quincunx pattern is more efficient for this spacing"))
         elif rect_efficiency > tri_efficiency:
-            feedback.pushInfo("   • Square/Rectangular pattern is more efficient for this spacing")
+            feedback.pushInfo(ag_tr("   • Square/Rectangular pattern is more efficient for this spacing"))
         else:
-            feedback.pushInfo("   • Triangular and Square patterns have similar efficiency")
+            feedback.pushInfo(ag_tr("   • Triangular and Square patterns have similar efficiency"))
         
         if pattern_type == 3:
-            feedback.pushInfo("   • Keyline pattern optimized for water management and erosion control")
+            feedback.pushInfo(ag_tr("   • Keyline pattern optimized for water management and erosion control"))
         elif pattern_type == 4:
-            feedback.pushInfo(f"   • Random pattern with minimum distance {spacing_x}m and maximum {spacing_y}m")
+            feedback.pushInfo(ag_trf('   • Random pattern with minimum distance {0}m and maximum {1}m', spacing_x, spacing_y))
         
         if slope_analysis:
-            feedback.pushInfo("   • Slope analysis completed successfully")
-            feedback.pushInfo("   • Slope values available in 'slope' field (degrees)")
-            feedback.pushInfo("   • Use these values to plan planting according to topography")
+            feedback.pushInfo(ag_tr("   • Slope analysis completed successfully"))
+            feedback.pushInfo(ag_tr("   • Slope values available in 'slope' field (degrees)"))
+            feedback.pushInfo(ag_tr("   • Use these values to plan planting according to topography"))
         else:
-            feedback.pushInfo("   • For slope analysis, provide a DEM in next execution")
+            feedback.pushInfo(ag_tr("   • For slope analysis, provide a DEM in next execution"))
         
         feedback.pushInfo("=" * 80)
 
@@ -1100,7 +1101,7 @@ class TreePlantingPatternAlgorithm(QgsProcessingAlgorithm):
         return self.tr("Generates tree planting points with different patterns inside polygons. If DEM provided: automatic slope analysis and keyline pattern available. Output fields: id, pattern, x, y, slope (degrees).")
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)
 
     def createInstance(self):
         return TreePlantingPatternAlgorithm()

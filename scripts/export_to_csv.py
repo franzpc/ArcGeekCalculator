@@ -8,6 +8,7 @@ from qgis.core import (QgsProcessing, QgsProcessingAlgorithm,
 
 import csv
 import io
+from .translation import ag_tr, ag_trf
 
 class ExportToCSVAlgorithm(QgsProcessingAlgorithm):
     INPUT = 'INPUT'
@@ -26,7 +27,7 @@ class ExportToCSVAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterEnum(
                 self.FORMAT,
                 self.tr('Output format'),
-                options=['CSV', 'Excel compatible CSV'],
+                options=[ag_tr('CSV'), ag_tr('Excel compatible CSV')],
                 defaultValue=0
             )
         )
@@ -76,10 +77,10 @@ class ExportToCSVAlgorithm(QgsProcessingAlgorithm):
                     writer.writerow(attributes)
                     feedback.setProgress(int(current * total))
 
-            feedback.pushInfo(f'Successfully exported {source.featureCount()} features to {output_file}')
+            feedback.pushInfo(ag_trf('Successfully exported {0} features to {1}', source.featureCount(), output_file))
             
         except Exception as e:
-            raise QgsProcessingException(f'Error writing CSV file: {str(e)}')
+            raise QgsProcessingException(ag_trf('Error writing CSV file: {0}', str(e)))
 
         return {self.OUTPUT: output_file}
 
@@ -110,7 +111,7 @@ class ExportToCSVAlgorithm(QgsProcessingAlgorithm):
         """)
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)
 
     def createInstance(self):
         return ExportToCSVAlgorithm()

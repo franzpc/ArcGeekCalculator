@@ -5,6 +5,7 @@ from qgis.core import (QgsProcessing, QgsProcessingAlgorithm, QgsProcessingParam
                        QgsProcessingContext, QgsRasterBandStats)
 from osgeo import gdal
 import math
+from .translation import ag_tr, ag_trf
 
 class SatelliteIndexCalculatorAlgorithm(QgsProcessingAlgorithm):
     SATELLITE_TYPE = 'SATELLITE_TYPE'
@@ -18,13 +19,13 @@ class SatelliteIndexCalculatorAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterEnum(
             self.SATELLITE_TYPE,
             self.tr('Satellite type'),
-            options=['Sentinel-2', 'Landsat-7', 'Landsat-8/9'],
+            options=[ag_tr('Sentinel-2'), ag_tr('Landsat-7'), ag_tr('Landsat-8/9')],
             defaultValue=0
         ))
         self.addParameter(QgsProcessingParameterEnum(
             self.INDEX_TYPE,
             self.tr('Index type'),
-            options=['NDVI', 'NDWI', 'NDBI', 'NDMI', 'MSI', 'NBR', 'AVI', 'SAVI'],
+            options=[ag_tr('NDVI'), ag_tr('NDWI'), ag_tr('NDBI'), ag_tr('NDMI'), ag_tr('MSI'), ag_tr('NBR'), ag_tr('AVI'), ag_tr('SAVI')],
             defaultValue=0
         ))
         self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_BAND_HIGHER, self.tr('Higher number band')))
@@ -90,7 +91,7 @@ class SatelliteIndexCalculatorAlgorithm(QgsProcessingAlgorithm):
         feedback.pushWarning(warning_message)
 
         try:
-            feedback.pushInfo("Starting index calculation...")
+            feedback.pushInfo(ag_tr("Starting index calculation..."))
             
             # Read raster data
             ds_higher = gdal.Open(band_higher.source())
@@ -99,7 +100,7 @@ class SatelliteIndexCalculatorAlgorithm(QgsProcessingAlgorithm):
             # Check if resolutions match
             if (ds_higher.RasterXSize != ds_lower.RasterXSize or 
                 ds_higher.RasterYSize != ds_lower.RasterYSize):
-                raise QgsProcessingException("Input bands have different resolutions. Please use bands with matching resolutions.")
+                raise QgsProcessingException(ag_tr("Input bands have different resolutions. Please use bands with matching resolutions."))
 
             band_a = ds_higher.GetRasterBand(1)
             band_b = ds_lower.GetRasterBand(1)
@@ -140,13 +141,13 @@ class SatelliteIndexCalculatorAlgorithm(QgsProcessingAlgorithm):
             outband.FlushCache()
             outds = None  # Close the dataset
 
-            feedback.pushInfo("Index calculation completed successfully.")
+            feedback.pushInfo(ag_tr("Index calculation completed successfully."))
             
             output_name = f"{selected_satellite}_{selected_index}"
             context.addLayerToLoadOnCompletion(output_raster, QgsProcessingContext.LayerDetails(output_name, context.project(), self.OUTPUT_RASTER))
 
         except Exception as e:
-            raise QgsProcessingException(f"An error occurred during index calculation: {str(e)}")
+            raise QgsProcessingException(ag_trf('An error occurred during index calculation: {0}', str(e)))
 
         return {self.OUTPUT_RASTER: output_raster, self.INFO_MESSAGE: warning_message}
 
@@ -166,7 +167,7 @@ class SatelliteIndexCalculatorAlgorithm(QgsProcessingAlgorithm):
         return SatelliteIndexCalculatorAlgorithm()
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)
 
     def shortHelpString(self):
         return self.tr("This algorithm calculates various two-band spectral indices from satellite imagery.\n\n"

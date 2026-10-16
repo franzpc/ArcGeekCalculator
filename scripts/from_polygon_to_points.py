@@ -5,6 +5,7 @@ from qgis.core import (QgsProcessing, QgsFeatureSink, QgsProcessingAlgorithm,
                        QgsFields, QgsField, QgsWkbTypes, QgsProcessingParameterPoint,
                        QgsCoordinateTransform, QgsProject)
 import math
+from .translation import ag_tr, ag_trf
 
 class PolygonToPointsAlgorithm(QgsProcessingAlgorithm):
     INPUT = 'INPUT'
@@ -171,7 +172,7 @@ class PolygonToPointsAlgorithm(QgsProcessingAlgorithm):
         """)
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)
 
     def createInstance(self):
         return PolygonToPointsAlgorithm()

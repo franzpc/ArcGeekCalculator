@@ -13,6 +13,7 @@ from qgis.core import (Qgis,
                       QgsProcessingException)
 import processing
 import os
+from .translation import ag_tr, ag_trf
 
 class ContourExportAlgorithm(QgsProcessingAlgorithm):
     """
@@ -55,7 +56,7 @@ class ContourExportAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterEnum(
                 self.OUTPUT_FORMAT,
                 self.tr('CAD Version'),
-                options=['AutoCAD 2000', 'AutoCAD 2004', 'AutoCAD 2007', 'AutoCAD 2010', 'AutoCAD 2013', 'AutoCAD 2018'],
+                options=[ag_tr('AutoCAD 2000'), ag_tr('AutoCAD 2004'), ag_tr('AutoCAD 2007'), ag_tr('AutoCAD 2010'), ag_tr('AutoCAD 2013'), ag_tr('AutoCAD 2018')],
                 defaultValue=5
             )
         )
@@ -172,7 +173,7 @@ class ContourExportAlgorithm(QgsProcessingAlgorithm):
             return {self.OUTPUT: output_file}
             
         except Exception as e:
-            feedback.reportError(f"Error during DXF export: {str(e)}")
+            feedback.reportError(ag_trf('Error during DXF export: {0}', str(e)))
             raise e
 
     def dxfEncoding(self):
@@ -232,7 +233,7 @@ class ContourExportAlgorithm(QgsProcessingAlgorithm):
         """)
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)
 
     def createInstance(self):
         return ContourExportAlgorithm()

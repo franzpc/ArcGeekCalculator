@@ -9,6 +9,7 @@ from qgis.core import (QgsProcessing, QgsProcessingAlgorithm, QgsProcessingParam
                        QgsCoordinateReferenceSystem, QgsRectangle, QgsFeature, QgsGeometry,
                        QgsMessageLog, Qgis)
 import logging
+from .translation import ag_tr, ag_trf
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -22,14 +23,14 @@ class WatershedAnalysisAlgorithm(QgsProcessingAlgorithm):
     MAX_RASTER_SIZE = 100000000  # 100 million cells, adjust as needed
 
     def initAlgorithm(self, config=None):
-        self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_DEM, 'Input DEM'))
-        self.addParameter(QgsProcessingParameterNumber(self.THRESHOLD, 'Flow Accumulation Threshold', 
+        self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_DEM, ag_tr('Input DEM')))
+        self.addParameter(QgsProcessingParameterNumber(self.THRESHOLD, ag_tr('Flow Accumulation Threshold'), 
                                                        type=QgsProcessingParameterNumber.Type.Integer, minValue=0, defaultValue=5000))
-        self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_ITERATIONS, 'Smooth Iterations',
+        self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_ITERATIONS, ag_tr('Smooth Iterations'),
                                                        type=QgsProcessingParameterNumber.Type.Integer, minValue=1, defaultValue=1))
-        self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_OFFSET, 'Smooth Offset',
+        self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_OFFSET, ag_tr('Smooth Offset'),
                                                        type=QgsProcessingParameterNumber.Type.Double, minValue=0, maxValue=0.5, defaultValue=0.25))
-        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_STREAMS, 'Stream Network'))
+        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_STREAMS, ag_tr('Stream Network')))
 
     def processAlgorithm(self, parameters, context, feedback):
         try:
@@ -48,7 +49,7 @@ class WatershedAnalysisAlgorithm(QgsProcessingAlgorithm):
                 raster_size = resampled_dem.width() * resampled_dem.height()
                 if raster_size <= self.MAX_RASTER_SIZE:
                     if attempt > 0:
-                        feedback.pushInfo(self.tr(f'DEM resampled to {current_cell_size:.2f} units per pixel for processing.'))
+                        feedback.pushInfo(ag_trf('DEM resampled to {0:.2f} units per pixel for processing.', current_cell_size))
                     break
                 
                 cell_size_multiplier *= 3
@@ -289,4 +290,4 @@ class WatershedAnalysisAlgorithm(QgsProcessingAlgorithm):
         return WatershedAnalysisAlgorithm()
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)

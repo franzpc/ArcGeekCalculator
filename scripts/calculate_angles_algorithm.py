@@ -6,6 +6,7 @@ from qgis.core import (QgsProcessing, QgsProcessingAlgorithm,
                       QgsField, QgsFields, QgsWkbTypes,
                       QgsProcessingException, QgsVectorLayer)
 import math
+from .translation import ag_tr, ag_trf
 
 class CalculateAnglesAlgorithm(QgsProcessingAlgorithm):
     INPUT = 'INPUT'
@@ -71,7 +72,7 @@ class CalculateAnglesAlgorithm(QgsProcessingAlgorithm):
 
             feedback.setProgress(feature_count * 100 / source.featureCount())
 
-        feedback.pushInfo(f'Processed {feature_count} features and created {total_points} angle points')
+        feedback.pushInfo(ag_trf('Processed {0} features and created {1} angle points', feature_count, total_points))
         
         return {self.OUTPUT: dest_id}
 
@@ -204,7 +205,7 @@ class CalculateAnglesAlgorithm(QgsProcessingAlgorithm):
         """)
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)
 
     def createInstance(self):
         return CalculateAnglesAlgorithm()

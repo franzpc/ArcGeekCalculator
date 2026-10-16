@@ -7,6 +7,7 @@ from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterVectorLayer
                        QgsProcessingParameterFeatureSink, QgsUnitTypes, QgsExpression,
                        QgsExpressionContext, QgsExpressionContextUtils, QgsFeature,
                        QgsCoordinateTransform)
+from .translation import ag_tr, ag_trf
 
 class CalculateLineGeometryAlgorithm(QgsProcessingAlgorithm):
     INPUT = 'INPUT'
@@ -32,7 +33,7 @@ class CalculateLineGeometryAlgorithm(QgsProcessingAlgorithm):
         ]
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)
 
     def createInstance(self):
         return CalculateLineGeometryAlgorithm()

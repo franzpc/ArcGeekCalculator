@@ -2,12 +2,13 @@ from qgis.PyQt.QtWidgets import QDialog, QVBoxLayout, QCheckBox, QPushButton, QL
 from qgis.PyQt.QtCore import QSettings
 from qgis.core import QgsProject
 from qgis.utils import iface
+from .translation import ag_tr, ag_trf
 
 class BasemapManager(QDialog):
     def __init__(self, iface):
         super().__init__()
         self.iface = iface
-        self.setWindowTitle("Manage Basemaps")
+        self.setWindowTitle(ag_tr("Manage Basemaps"))
         self.layout = QVBoxLayout()
         
         self.basemaps = {
@@ -35,7 +36,7 @@ class BasemapManager(QDialog):
             self.checkboxes[name] = checkbox
             self.layout.addWidget(checkbox)
         
-        self.apply_button = QPushButton("Apply")
+        self.apply_button = QPushButton(ag_tr("Apply"))
         self.apply_button.clicked.connect(self.apply_basemaps)
         self.layout.addWidget(self.apply_button)
         
@@ -51,11 +52,11 @@ class BasemapManager(QDialog):
         if changes_made:
             # Reload connections
             iface.reloadConnections()
-            QMessageBox.information(self, "Restart Required", 
-                "Basemaps have been added successfully. Please restart QGIS to see the changes.")
+            QMessageBox.information(self, ag_tr("Restart Required"), 
+                ag_tr("Basemaps have been added successfully. Please restart QGIS to see the changes."))
         else:
-            QMessageBox.information(self, "No Changes", 
-                "No new basemaps were added.")
+            QMessageBox.information(self, ag_tr("No Changes"), 
+                ag_tr("No new basemaps were added."))
         
         self.close()
 

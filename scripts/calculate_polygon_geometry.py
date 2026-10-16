@@ -7,6 +7,7 @@ from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterVectorLayer
                        QgsProcessingParameterFeatureSink, QgsUnitTypes, QgsExpression,
                        QgsExpressionContext, QgsExpressionContextUtils, QgsFeature,
                        QgsCoordinateTransform, QgsVectorFileWriter)
+from .translation import ag_tr, ag_trf
 
 class CalculatePolygonGeometryAlgorithm(QgsProcessingAlgorithm):
     INPUT = 'INPUT'
@@ -45,7 +46,7 @@ class CalculatePolygonGeometryAlgorithm(QgsProcessingAlgorithm):
         ]
 
     def tr(self, string):
-        return QCoreApplication.translate('Processing', string)
+        return ag_tr(string)
 
     def createInstance(self):
         return CalculatePolygonGeometryAlgorithm()
